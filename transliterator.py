@@ -1,3 +1,4 @@
+
 class SinhalaTransliterator:
     """
     Class to handle transliteration from Singlish to Sinhala
@@ -49,7 +50,10 @@ class SinhalaTransliterator:
                 if len(suggestions) >= max_suggestions:
                     break
         
-        return suggestions[:max_suggestions]
+        # Ensure we have valid suggestions before slicing
+        if not suggestions:
+            return []
+        return sorted(suggestions)[:max_suggestions]
     
     def get_singlish_for_sinhala(self, sinhala_word):
         """

@@ -58,30 +58,55 @@ class ThemeManager:
         """
         return """
             QMainWindow, QWidget {
-                background-color: #2E2E2E;
+                background-color: #1E1E1E;
                 color: #FFFFFF;
             }
             QTextEdit {
-                background-color: #3A3A3A;
+                background-color: #2D2D2D;
                 color: #FFFFFF;
-                border: 1px solid #555555;
+                border: 1px solid #404040;
+                selection-background-color: #264F78;
+                selection-color: #FFFFFF;
             }
             QMenuBar, QMenu {
                 background-color: #2E2E2E;
                 color: #FFFFFF;
             }
             QToolBar {
-                background-color: #333333;
-                border: 1px solid #555555;
+                background-color: #1E1E1E;
+                border-bottom: 1px solid #333333;
+                spacing: 2px;
+                padding: 2px;
+            }
+            QToolBar QToolButton {
+                background-color: transparent;
+                border: 1px solid transparent;
+                border-radius: 3px;
+                padding: 4px;
+                margin: 1px;
+                color: #FFFFFF;
+            }
+            QToolBar QToolButton:hover {
+                background-color: #2A2A2A;
+                border: 1px solid #404040;
+            }
+            QToolBar QToolButton:pressed {
+                background-color: #404040;
             }
             QPushButton {
-                background-color: #444444;
+                background-color: #2D2D2D;
                 color: #FFFFFF;
-                border: 1px solid #666666;
-                padding: 5px;
+                border: 1px solid #404040;
+                border-radius: 3px;
+                padding: 6px 12px;
+                min-width: 80px;
             }
             QPushButton:hover {
-                background-color: #555555;
+                background-color: #3D3D3D;
+                border: 1px solid #505050;
+            }
+            QPushButton:pressed {
+                background-color: #505050;
             }
             QComboBox, QFontComboBox {
                 background-color: #444444;
@@ -137,17 +162,40 @@ class ThemeManager:
                 color: #333333;
             }
             QToolBar {
-                background-color: #F0F0F0;
-                border: 1px solid #DDDDDD;
+                background-color: #F8F9FA;
+                border-bottom: 1px solid #E4E6E8;
+                spacing: 2px;
+                padding: 2px;
+            }
+            QToolBar QToolButton {
+                background-color: transparent;
+                border: 1px solid transparent;
+                border-radius: 3px;
+                padding: 4px;
+                margin: 1px;
+                color: #444444;
+            }
+            QToolBar QToolButton:hover {
+                background-color: #F0F2F4;
+                border: 1px solid #E4E6E8;
+            }
+            QToolBar QToolButton:pressed {
+                background-color: #E4E6E8;
             }
             QPushButton {
-                background-color: #E0E0E0;
-                color: #333333;
-                border: 1px solid #CCCCCC;
-                padding: 5px;
+                background-color: #FFFFFF;
+                color: #444444;
+                border: 1px solid #DFE1E5;
+                border-radius: 3px;
+                padding: 6px 12px;
+                min-width: 80px;
             }
             QPushButton:hover {
-                background-color: #D0D0D0;
+                background-color: #F8F9FA;
+                border: 1px solid #C8CCD1;
+            }
+            QPushButton:pressed {
+                background-color: #F0F2F4;
             }
             QComboBox, QFontComboBox {
                 background-color: #FFFFFF;

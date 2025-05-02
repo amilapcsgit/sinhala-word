@@ -1,10 +1,10 @@
 {
     "theme": "dark",
     "font": "Bhashitha2Sans",
-    "font_size": 22,
+    "font_size": 72,
     "window_size": [
-        1030,
-        832
+        1269,
+        927
     ],
     "show_keyboard": true,
     "show_suggestions": true,

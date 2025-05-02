@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QApplication, QTextEdit, QFileDialog, QToolBar, QWidget, QVBoxLayout,
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
     QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy,
-    QStyledItemDelegate
+    QStyledItemDelegate, QMenu
 )
 from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase, QFontDatabase, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
@@ -65,7 +65,7 @@ class FontSizeDelegate(QStyledItemDelegate):
         super().__init__(parent)
     
     def paint(self, painter, option, index):
-        # Ensure text is centered and properly sized
+        # Simply use the default painting with centered alignment
         option.displayAlignment = Qt.AlignCenter
         super().paint(painter, option, index)
 
@@ -249,6 +249,7 @@ class SinhalaWordApp(QMainWindow):
         self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"]) 
         self.keyboard_toggle_action.triggered.connect(self.toggle_keyboard)
         self.keyboard_toggle_action.setIcon(self.create_icon("keyboard"))
+        self.keyboard_toggle_action.setProperty("icon_name", "keyboard")
 
         # --- On-screen Keyboard Area ---
         # Create the Sinhala keyboard using our custom implementation with dark mode support
@@ -267,6 +268,9 @@ class SinhalaWordApp(QMainWindow):
         
         # Update combo box styles based on theme
         self.update_combo_box_styles()
+        
+        # Update icons for the current theme
+        self.update_icons_for_theme(self.theme_manager.current_theme)
 
         # --- Finalize UI Setup ---
         # Create a central widget and layout to hold the editor and suggestion area
@@ -415,7 +419,9 @@ class SinhalaWordApp(QMainWindow):
         try:
             # Import the get_toolbar_icon function from pyside_icons.py
             from pyside_icons import get_toolbar_icon
-            return get_toolbar_icon(name)
+            # Use the current theme to get the appropriate icon color
+            theme = "dark" if self.theme_manager.is_dark_mode() else "light"
+            return get_toolbar_icon(name, theme=theme)
         except (ImportError, AttributeError):
             # Fallback if pyside_icons.py is not available or function not found
             return None
@@ -427,48 +433,57 @@ class SinhalaWordApp(QMainWindow):
         self.new_action.setShortcut("Ctrl+N")
         self.new_action.triggered.connect(self.new_file)
         self.new_action.setIcon(self.create_icon("new"))
+        self.new_action.setProperty("icon_name", "new")
 
         self.open_action = QAction("Open...", self)
         self.open_action.setShortcut("Ctrl+O")
         self.open_action.triggered.connect(self.open_file)
         self.open_action.setIcon(self.create_icon("open"))
+        self.open_action.setProperty("icon_name", "open")
 
         self.save_action = QAction("Save", self)
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.save_file)
         self.save_action.setIcon(self.create_icon("save"))
+        self.save_action.setProperty("icon_name", "save")
 
         # Edit actions
         self.cut_action = QAction("Cut", self)
         self.cut_action.setShortcut("Ctrl+X")
         self.cut_action.triggered.connect(self.editor.cut)
         self.cut_action.setIcon(self.create_icon("cut"))
+        self.cut_action.setProperty("icon_name", "cut")
 
         self.copy_action = QAction("Copy", self)
         self.copy_action.setShortcut("Ctrl+C")
         self.copy_action.triggered.connect(self.editor.copy)
         self.copy_action.setIcon(self.create_icon("copy"))
+        self.copy_action.setProperty("icon_name", "copy")
 
         self.paste_action = QAction("Paste", self)
         self.paste_action.setShortcut("Ctrl+V")
         self.paste_action.triggered.connect(self.editor.paste)
         self.paste_action.setIcon(self.create_icon("paste"))
+        self.paste_action.setProperty("icon_name", "paste")
 
         self.undo_action = QAction("Undo", self)
         self.undo_action.setShortcut("Ctrl+Z")
         self.undo_action.triggered.connect(self.editor.undo)
         self.undo_action.setIcon(self.create_icon("undo"))
+        self.undo_action.setProperty("icon_name", "undo")
 
         self.redo_action = QAction("Redo", self)
         self.redo_action.setShortcut("Ctrl+Y")
         self.redo_action.triggered.connect(self.editor.redo)
         self.redo_action.setIcon(self.create_icon("redo"))
+        self.redo_action.setProperty("icon_name", "redo")
 
         # View actions
         self.toggle_theme_action = QAction("Toggle Theme", self)
         self.toggle_theme_action.setShortcut("Ctrl+T")
         self.toggle_theme_action.triggered.connect(self.toggle_theme)
         self.toggle_theme_action.setIcon(self.create_icon("theme"))
+        self.toggle_theme_action.setProperty("icon_name", "theme")
 
         # Add actions to the main window (this makes them available globally)
         self.addAction(self.new_action)
@@ -669,9 +684,13 @@ class SinhalaWordApp(QMainWindow):
         # Font Size ComboBox
         self.size_combo = QComboBox(self)
         self.size_combo.setEditable(True)
-        self.size_combo.setMinimumWidth(70)  # Ensure enough width to display numbers
+        self.size_combo.setFixedWidth(50)  # Slightly wider to ensure numbers are visible
         self.size_combo.setMaxVisibleItems(10)  # Limit visible items to prevent excessive scrolling
         self.size_combo.setMaxCount(len(config.FONT_SIZES))  # Limit total items
+        
+        # Set alignment for the line edit inside the combo box
+        if self.size_combo.lineEdit():
+            self.size_combo.lineEdit().setAlignment(Qt.AlignCenter)
         
         # Populate with common font sizes
         sizes = config.FONT_SIZES
@@ -688,10 +707,13 @@ class SinhalaWordApp(QMainWindow):
         # Add custom styling for better appearance
         self.size_combo.setStyleSheet("""
             QComboBox { 
-                padding-right: 15px; 
+                padding-right: 15px;
+                padding-left: 5px;
+                font-weight: bold;  /* Make the font bold for better visibility */
             }
             QComboBox::item {
                 padding: 3px;
+                font-weight: bold;  /* Make dropdown items bold too */
             }
         """)
         
@@ -787,7 +809,7 @@ class SinhalaWordApp(QMainWindow):
             dropdown_bg = "#444444"
             dropdown_fg = "#FFFFFF"
             dropdown_border = "#666666"
-            selection_bg = "#264F78"
+            selection_bg = "#1A1A1A"  # Darker selection background
             selection_fg = "#FFFFFF"
         else:
             dropdown_bg = "#FFFFFF"
@@ -803,8 +825,9 @@ class SinhalaWordApp(QMainWindow):
                     background-color: {dropdown_bg};
                     color: {dropdown_fg};
                     border: 1px solid {dropdown_border};
-                    padding-right: 15px;
-                    padding-left: 5px;
+                    padding-right: 12px;
+                    padding-left: 2px;
+                    text-align: center;
                 }}
                 QComboBox::drop-down {{
                     subcontrol-origin: padding;
@@ -844,12 +867,48 @@ class SinhalaWordApp(QMainWindow):
         # Update combo box styles
         self.update_combo_box_styles()
         
+        # Update toolbar and menu icons for the new theme
+        self.update_icons_for_theme(theme)
+        
         # Update preferences
         self.preferences["theme"] = theme
         config.save_user_preferences(self.preferences)
         
         # Log theme change
         logging.info(f"Theme changed to {theme}")
+        
+    def update_icons_for_theme(self, theme):
+        """Update all toolbar and menu icons for the current theme."""
+        # Import the icon creation function
+        from pyside_icons import get_toolbar_icon
+        
+        # Update standard toolbar icons
+        if hasattr(self, 'standard_toolbar'):
+            for action in self.standard_toolbar.actions():
+                icon_name = action.property("icon_name")
+                if icon_name:
+                    action.setIcon(get_toolbar_icon(icon_name, theme))
+        
+        # Update formatting toolbar icons
+        if hasattr(self, 'formatting_toolbar'):
+            for action in self.formatting_toolbar.actions():
+                icon_name = action.property("icon_name")
+                if icon_name:
+                    action.setIcon(get_toolbar_icon(icon_name, theme))
+        
+        # Update toggles toolbar icons
+        if hasattr(self, 'toggles_toolbar'):
+            for action in self.toggles_toolbar.actions():
+                icon_name = action.property("icon_name")
+                if icon_name:
+                    action.setIcon(get_toolbar_icon(icon_name, theme))
+        
+        # Update menu icons
+        for menu in self.menuBar().findChildren(QMenu):
+            for action in menu.actions():
+                icon_name = action.property("icon_name")
+                if icon_name:
+                    action.setIcon(get_toolbar_icon(icon_name, theme))
 
     def update_recent_files_menu(self):
         """Update the recent files menu with the latest files."""

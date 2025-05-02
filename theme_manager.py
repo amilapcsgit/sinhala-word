@@ -72,6 +72,10 @@ class ThemeManager:
                 background-color: #2E2E2E;
                 color: #FFFFFF;
             }
+            QMenuBar::item:selected, QMenu::item:selected {
+                background-color: #1A1A1A;  /* Darker highlight color */
+                color: #FFFFFF;
+            }
             QToolBar {
                 background-color: #1E1E1E;
                 border-bottom: 1px solid #333333;
@@ -125,7 +129,7 @@ class ThemeManager:
                 background-color: #444444;
                 color: #FFFFFF;
                 border: 1px solid #666666;
-                selection-background-color: #264F78;
+                selection-background-color: #1A1A1A;  /* Darker selection background */
                 selection-color: #FFFFFF;
                 outline: 0px;
             }

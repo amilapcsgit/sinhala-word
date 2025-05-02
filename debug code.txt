@@ -1,0 +1,181 @@
+﻿PS C:\sinhala word> python SinhalaWordProcessor.py
+Loading main lexicon from chunks in chunks...
+Loaded 144 words from sinhalawordmap.json
+Total combined dictionary size: 24385 words.
+DEBUG: Current buffer word: 'm'
+DEBUG: Entering suggestions. Prefix: 'm'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'm': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+DEBUG: Current buffer word: 'ma'
+DEBUG: Entering suggestions. Prefix: 'ma'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'ma': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+DEBUG: Current buffer word: 'mam'
+DEBUG: Entering suggestions. Prefix: 'mam'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'mam': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+DEBUG: Current buffer word: 'mama'
+DEBUG: Entering suggestions. Prefix: 'mama'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'mama': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+qt.text.font.db: OpenType support missing for "Tahoma", script 20
+qt.text.font.db: OpenType support missing for "Arial", script 20
+qt.text.font.db: OpenType support missing for "MS UI Gothic", script 20
+qt.text.font.db: OpenType support missing for "SimSun", script 20
+qt.text.font.db: OpenType support missing for "Arial Unicode MS", script 20
+qt.text.font.db: OpenType support missing for "Segoe UI Emoji", script 20
+qt.text.font.db: OpenType support missing for "Segoe UI Symbol", script 20
+DEBUG: Current buffer word: 'a'
+DEBUG: Entering suggestions. Prefix: 'a'
+DEBUG: Suggestions generated: ['amila']
+DEBUG: Suggestions found for 'a': ['amila']
+DEBUG: Sinhala equivalent for 'amila': 'අමිල'
+DEBUG: Current buffer word: 'am'
+DEBUG: Entering suggestions. Prefix: 'am'
+DEBUG: Suggestions generated: ['amila']
+DEBUG: Suggestions found for 'am': ['amila']
+DEBUG: Sinhala equivalent for 'amila': 'අමිල'
+DEBUG: Current buffer word: 'ami'
+DEBUG: Entering suggestions. Prefix: 'ami'
+DEBUG: Suggestions generated: ['amila']
+DEBUG: Suggestions found for 'ami': ['amila']
+DEBUG: Sinhala equivalent for 'amila': 'අමිල'
+DEBUG: Current buffer word: 'amil'
+DEBUG: Entering suggestions. Prefix: 'amil'
+DEBUG: Suggestions generated: ['amila']
+DEBUG: Suggestions found for 'amil': ['amila']
+DEBUG: Sinhala equivalent for 'amila': 'අමිල'
+DEBUG: Current buffer word: 'amila'
+DEBUG: Entering suggestions. Prefix: 'amila'
+DEBUG: Suggestions generated: ['amila']
+DEBUG: Suggestions found for 'amila': ['amila']
+DEBUG: Sinhala equivalent for 'amila': 'අමිල'
+DEBUG: Current buffer word: 'm'
+DEBUG: Entering suggestions. Prefix: 'm'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'm': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+DEBUG: Current buffer word: 'ma'
+DEBUG: Entering suggestions. Prefix: 'ma'
+DEBUG: Suggestions generated: ['mama']
+DEBUG: Suggestions found for 'ma': ['mama']
+DEBUG: Sinhala equivalent for 'mama': 'මම'
+DEBUG: Current buffer word: 'mat'
+DEBUG: Entering suggestions. Prefix: 'mat'
+DEBUG: Suggestions generated: ['mata']
+DEBUG: Suggestions found for 'mat': ['mata']
+DEBUG: Sinhala equivalent for 'mata': 'මට'
+DEBUG: Current buffer word: 'mata'
+DEBUG: Entering suggestions. Prefix: 'mata'
+DEBUG: Suggestions generated: ['mata']
+DEBUG: Suggestions found for 'mata': ['mata']
+DEBUG: Sinhala equivalent for 'mata': 'මට'
+DEBUG: Current buffer word: 's'
+DEBUG: Entering suggestions. Prefix: 's'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 's': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'si'
+DEBUG: Entering suggestions. Prefix: 'si'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'si': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'sin'
+DEBUG: Entering suggestions. Prefix: 'sin'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'sin': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'sinh'
+DEBUG: Entering suggestions. Prefix: 'sinh'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'sinh': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'sinha'
+DEBUG: Entering suggestions. Prefix: 'sinha'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'sinha': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'sinhal'
+DEBUG: Entering suggestions. Prefix: 'sinhal'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'sinhal': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'sinhala'
+DEBUG: Entering suggestions. Prefix: 'sinhala'
+DEBUG: Suggestions generated: ['sinhala']
+DEBUG: Suggestions found for 'sinhala': ['sinhala']
+DEBUG: Sinhala equivalent for 'sinhala': 'සිංහල'
+DEBUG: Current buffer word: 'l'
+DEBUG: Entering suggestions. Prefix: 'l'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'l': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'li'
+DEBUG: Entering suggestions. Prefix: 'li'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'li': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'liy'
+DEBUG: Entering suggestions. Prefix: 'liy'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'liy': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'liya'
+DEBUG: Entering suggestions. Prefix: 'liya'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'liya': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'liyan'
+DEBUG: Entering suggestions. Prefix: 'liyan'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'liyan': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'liyann'
+DEBUG: Entering suggestions. Prefix: 'liyann'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'liyann': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'liyanna'
+DEBUG: Entering suggestions. Prefix: 'liyanna'
+DEBUG: Suggestions generated: ['liyanna']
+DEBUG: Suggestions found for 'liyanna': ['liyanna']
+DEBUG: Sinhala equivalent for 'liyanna': 'ලියන්න'
+DEBUG: Current buffer word: 'p'
+DEBUG: Entering suggestions. Prefix: 'p'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'p': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'pu'
+DEBUG: Entering suggestions. Prefix: 'pu'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'pu': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'pul'
+DEBUG: Entering suggestions. Prefix: 'pul'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'pul': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'pulu'
+DEBUG: Entering suggestions. Prefix: 'pulu'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'pulu': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'puluw'
+DEBUG: Entering suggestions. Prefix: 'puluw'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'puluw': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'puluwa'
+DEBUG: Entering suggestions. Prefix: 'puluwa'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'puluwa': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'
+DEBUG: Current buffer word: 'puluwan'
+DEBUG: Entering suggestions. Prefix: 'puluwan'
+DEBUG: Suggestions generated: ['puluwan']
+DEBUG: Suggestions found for 'puluwan': ['puluwan']
+DEBUG: Sinhala equivalent for 'puluwan': 'පුළුවන්'

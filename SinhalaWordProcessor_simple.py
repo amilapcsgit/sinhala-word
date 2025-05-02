@@ -298,6 +298,8 @@ class SinhalaWordApp(QMainWindow):
         self.editor.installEventFilter(self)
         # Connect textChanged to update_status and update_suggestion_list
         self.editor.textChanged.connect(self.on_text_changed)
+        # Connect cursor position change to update formatting buttons
+        self.editor.cursorPositionChanged.connect(self.update_format_actions)
         # Add context menu support
         self.editor.setContextMenuPolicy(Qt.CustomContextMenu)
         self.editor.customContextMenuRequested.connect(self.show_context_menu)
@@ -723,6 +725,34 @@ class SinhalaWordApp(QMainWindow):
         # Connect size change signals
         self.size_combo.currentTextChanged.connect(self.change_font_size)
         self.formatting_toolbar.addWidget(self.size_combo)
+        
+        # Add separator
+        self.formatting_toolbar.addSeparator()
+        
+        # Add text formatting actions (bold, italic, underline)
+        self.bold_action = QAction("Bold", self)
+        self.bold_action.setCheckable(True)
+        self.bold_action.setIcon(self.create_icon("bold"))
+        self.bold_action.setProperty("icon_name", "bold")
+        self.bold_action.setShortcut("Ctrl+B")
+        self.bold_action.triggered.connect(self.toggle_bold)
+        self.formatting_toolbar.addAction(self.bold_action)
+        
+        self.italic_action = QAction("Italic", self)
+        self.italic_action.setCheckable(True)
+        self.italic_action.setIcon(self.create_icon("italic"))
+        self.italic_action.setProperty("icon_name", "italic")
+        self.italic_action.setShortcut("Ctrl+I")
+        self.italic_action.triggered.connect(self.toggle_italic)
+        self.formatting_toolbar.addAction(self.italic_action)
+        
+        self.underline_action = QAction("Underline", self)
+        self.underline_action.setCheckable(True)
+        self.underline_action.setIcon(self.create_icon("underline"))
+        self.underline_action.setProperty("icon_name", "underline")
+        self.underline_action.setShortcut("Ctrl+U")
+        self.underline_action.triggered.connect(self.toggle_underline)
+        self.formatting_toolbar.addAction(self.underline_action)
 
         # --- Feature Toggles Toolbar ---
         self.toggles_toolbar = self.addToolBar("Features")
@@ -762,19 +792,29 @@ class SinhalaWordApp(QMainWindow):
         self.toggles_toolbar.addAction(self.toggle_theme_action)
         
     def change_font_size(self, size_text):
-        """Change the font size of the editor."""
+        """Change the font size of the selected text or the entire editor if no selection."""
         try:
             # Convert the size text to an integer
             size = int(size_text)
             
-            # Update the font
-            self.base_font.setPointSize(size)
-            self.editor.setFont(self.base_font)
-            self.suggestion_area.setFont(self.base_font)
+            # Get the current cursor
+            cursor = self.editor.textCursor()
             
-            # Update preferences
-            self.preferences["font_size"] = size
-            config.save_user_preferences(self.preferences)
+            if cursor.hasSelection():
+                # Apply font size only to selected text
+                format = QTextCharFormat()
+                format.setFontPointSize(size)
+                cursor.mergeCharFormat(format)
+                self.editor.setTextCursor(cursor)
+            else:
+                # No selection, update the default font for future text
+                self.base_font.setPointSize(size)
+                self.editor.setFont(self.base_font)
+                self.suggestion_area.setFont(self.base_font)
+                
+                # Update preferences
+                self.preferences["font_size"] = size
+                config.save_user_preferences(self.preferences)
             
             # Log the change
             logging.info(f"Font size changed to {size}")
@@ -787,19 +827,92 @@ class SinhalaWordApp(QMainWindow):
             self.size_combo.setCurrentText(str(current_size))
             
     def change_font_family(self, font_name):
-        """Change the font family of the editor."""
-        # Update the font
-        self.base_font.setFamily(font_name)
-        self.editor.setFont(self.base_font)
-        self.suggestion_area.setFont(self.base_font)
+        """Change the font family of the selected text or the entire editor if no selection."""
+        # Get the current cursor
+        cursor = self.editor.textCursor()
         
-        # Update preferences
-        self.preferences["font"] = font_name
-        config.save_user_preferences(self.preferences)
+        if cursor.hasSelection():
+            # Apply font family only to selected text
+            format = QTextCharFormat()
+            format.setFontFamily(font_name)
+            cursor.mergeCharFormat(format)
+            self.editor.setTextCursor(cursor)
+        else:
+            # No selection, update the default font for future text
+            self.base_font.setFamily(font_name)
+            self.editor.setFont(self.base_font)
+            self.suggestion_area.setFont(self.base_font)
+            
+            # Update preferences
+            self.preferences["font"] = font_name
+            config.save_user_preferences(self.preferences)
         
         # Log the change
         logging.info(f"Font family changed to {font_name}")
         
+    def toggle_bold(self):
+        """Toggle bold formatting for selected text."""
+        cursor = self.editor.textCursor()
+        if cursor.hasSelection():
+            format = QTextCharFormat()
+            # Toggle bold state
+            if self.bold_action.isChecked():
+                format.setFontWeight(QFont.Bold)
+            else:
+                format.setFontWeight(QFont.Normal)
+            cursor.mergeCharFormat(format)
+            self.editor.setTextCursor(cursor)
+        else:
+            # If no selection, set the state for future typing
+            format = self.editor.currentCharFormat()
+            if self.bold_action.isChecked():
+                format.setFontWeight(QFont.Bold)
+            else:
+                format.setFontWeight(QFont.Normal)
+            self.editor.setCurrentCharFormat(format)
+    
+    def toggle_italic(self):
+        """Toggle italic formatting for selected text."""
+        cursor = self.editor.textCursor()
+        if cursor.hasSelection():
+            format = QTextCharFormat()
+            format.setFontItalic(self.italic_action.isChecked())
+            cursor.mergeCharFormat(format)
+            self.editor.setTextCursor(cursor)
+        else:
+            # If no selection, set the state for future typing
+            format = self.editor.currentCharFormat()
+            format.setFontItalic(self.italic_action.isChecked())
+            self.editor.setCurrentCharFormat(format)
+    
+    def toggle_underline(self):
+        """Toggle underline formatting for selected text."""
+        cursor = self.editor.textCursor()
+        if cursor.hasSelection():
+            format = QTextCharFormat()
+            format.setFontUnderline(self.underline_action.isChecked())
+            cursor.mergeCharFormat(format)
+            self.editor.setTextCursor(cursor)
+        else:
+            # If no selection, set the state for future typing
+            format = self.editor.currentCharFormat()
+            format.setFontUnderline(self.underline_action.isChecked())
+            self.editor.setCurrentCharFormat(format)
+    
+    def update_format_actions(self):
+        """Update the state of formatting actions based on current cursor position."""
+        cursor = self.editor.textCursor()
+        format = cursor.charFormat()
+        
+        # Update bold action
+        self.bold_action.setChecked(format.fontWeight() == QFont.Bold)
+        
+        # Update italic action
+        self.italic_action.setChecked(format.fontItalic())
+        
+        # Update underline action
+        self.underline_action.setChecked(format.fontUnderline())
+    
     def update_combo_box_styles(self):
         """Update combo box styles based on current theme."""
         is_dark = self.theme_manager.is_dark_mode()

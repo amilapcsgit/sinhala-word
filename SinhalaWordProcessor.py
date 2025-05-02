@@ -1,4 +1,4 @@
-# Sinhala Word Processor — PyQt5 (v3.1-beta - Buffer Input)
+# Sinhala Word Processor — PySide6 (v3.2 - Refactored)
 """
 A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent UI:
 
@@ -24,11 +24,16 @@ Pack as EXE:
 pyinstaller --noconfirm --onefile --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor.py
 ```
 """
-import sys, os, json, re, gzip
+import sys
+import os
+import json
+import re
+import gzip
+import logging
 from PySide6.QtWidgets import (
     QApplication, QTextEdit, QFileDialog, QToolBar, QWidget, QVBoxLayout,
-    QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, QListWidget,
-    QListWidgetItem, QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy
+    QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
+    QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy
 )
 from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
@@ -36,12 +41,20 @@ from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 # Import our custom keyboard implementation
 from pyside_keyboard import SinhalaKeyboard
 
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("SinhalaWordProcessor")
+
 # ------------------------------------------------------------------
-#  Constants & Global Helpers (defined before app creation)
+#  Constants & Global Helpers
 # ------------------------------------------------------------------
 HERE = os.path.dirname(os.path.abspath(__file__))
 LEXICON_CHUNKS_DIR = os.path.join(HERE, "dictionary", "chunks")
 USER_MAP_FP_DEFAULT = os.path.join(HERE, "sinhalawordmap.json")
+WORD_PATTERN = re.compile(r'\b\w+\b')  # Compiled regex for word counting
 
 # Phonetic fallback definitions
 VOW = {"aa":"ා","a":"","ae":"ැ","aae":"ෑ","i":"ි","ii":"ී","u":"ු","uu":"ූ",
@@ -68,11 +81,6 @@ def _phonetic_global(word: str) -> str:
         else:
             out += VOW_INIT.get(v, v)
     return out or word
-
-# ------------------------------------------------------------------
-#  Main Execution Block
-# ------------------------------------------------------------------
-if __name__ == "__main__":
     # Enable high DPI scaling
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 

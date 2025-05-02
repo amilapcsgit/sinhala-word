@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
     QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy
 )
-from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase
+from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase, QFontDatabase, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 
 # Import our custom modules
@@ -58,23 +58,48 @@ logger = logging.getLogger("SinhalaWordProcessor")
 # ------------------------------------------------------------------
 WORD_PATTERN = re.compile(r'\b\w+\b')  # Compiled regex for word counting
 
-# Path to the fonts directory
-FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts")
+# Path to the fonts directory - use absolute path to ensure it works correctly
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 
 def load_sinhala_fonts():
     """Load Sinhala fonts from the fonts directory."""
+    global FONTS_DIR
     font_families = []
+    
+    # Check if fonts directory exists
+    if not os.path.exists(FONTS_DIR):
+        logging.warning(f"Fonts directory not found at {FONTS_DIR}")
+        # Try alternate path
+        alt_fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+        if os.path.exists(alt_fonts_dir):
+            logging.info(f"Using alternate fonts directory: {alt_fonts_dir}")
+            FONTS_DIR = alt_fonts_dir
+    
+    # Load fonts from directory
     if os.path.exists(FONTS_DIR):
+        logging.info(f"Loading fonts from: {FONTS_DIR}")
         for font_file in os.listdir(FONTS_DIR):
             if font_file.lower().endswith(('.ttf', '.otf')):
                 font_path = os.path.join(FONTS_DIR, font_file)
                 font_id = QFontDatabase.addApplicationFont(font_path)
                 if font_id != -1:
-                    font_families.extend(QFontDatabase.applicationFontFamilies(font_id))
-                    logging.info(f"Loaded font: {font_file}")
+                    families = QFontDatabase.applicationFontFamilies(font_id)
+                    font_families.extend(families)
+                    logging.info(f"Loaded font: {font_file} - Families: {', '.join(families)}")
                 else:
                     logging.error(f"Failed to load font: {font_file}")
+    else:
+        logging.error(f"Fonts directory not found: {FONTS_DIR}")
+    
+    # Log all available font families for debugging
+    all_fonts = QFontDatabase.families()
+    logging.info(f"All available font families: {', '.join(all_fonts)}")
+    
     return font_families
+
+
+
+
 
 # Phonetic fallback definitions
 VOW = {"aa":"ා","a":"","ae":"ැ","aae":"ෑ","i":"ි","ii":"ී","u":"ු","uu":"ූ",
@@ -123,6 +148,23 @@ class SinhalaWordApp(QMainWindow):
 
         # --- Load Sinhala Fonts ---
         self.sinhala_font_families = load_sinhala_fonts()
+        font_name = self.preferences["font"]
+        font_size = self.preferences["font_size"]
+        
+        # If we have Sinhala fonts loaded, prefer those
+        if self.sinhala_font_families and font_name not in self.sinhala_font_families:
+            # Use the first available Sinhala font if preferred font not in our loaded fonts
+            if self.sinhala_font_families:
+                font_name = self.sinhala_font_families[0]
+                # Update preferences
+                self.preferences["font"] = font_name
+                logging.info(f"Using Sinhala font: {font_name}")
+        
+        # Create the font
+        self.base_font = QFont(font_name, font_size)
+        self.base_font.setStyleHint(QFont.StyleHint.AnyStyle, QFont.StyleStrategy.PreferMatch)
+        
+        # Apply to editor
         
         # --- Initialize Core Attributes FIRST ---
         self.MAIN_LEXICON = {}

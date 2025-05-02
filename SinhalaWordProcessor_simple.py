@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
     QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy
 )
-from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon
+from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 
 # Import our custom modules
@@ -57,6 +57,24 @@ logger = logging.getLogger("SinhalaWordProcessor")
 #  Constants & Global Helpers
 # ------------------------------------------------------------------
 WORD_PATTERN = re.compile(r'\b\w+\b')  # Compiled regex for word counting
+
+# Path to the fonts directory
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts")
+
+def load_sinhala_fonts():
+    """Load Sinhala fonts from the fonts directory."""
+    font_families = []
+    if os.path.exists(FONTS_DIR):
+        for font_file in os.listdir(FONTS_DIR):
+            if font_file.lower().endswith(('.ttf', '.otf')):
+                font_path = os.path.join(FONTS_DIR, font_file)
+                font_id = QFontDatabase.addApplicationFont(font_path)
+                if font_id != -1:
+                    font_families.extend(QFontDatabase.applicationFontFamilies(font_id))
+                    logging.info(f"Loaded font: {font_file}")
+                else:
+                    logging.error(f"Failed to load font: {font_file}")
+    return font_families
 
 # Phonetic fallback definitions
 VOW = {"aa":"ා","a":"","ae":"ැ","aae":"ෑ","i":"ි","ii":"ී","u":"ු","uu":"ූ",
@@ -103,6 +121,9 @@ class SinhalaWordApp(QMainWindow):
         # --- Load User Preferences ---
         self.preferences = config.load_user_preferences()
 
+        # --- Load Sinhala Fonts ---
+        self.sinhala_font_families = load_sinhala_fonts()
+        
         # --- Initialize Core Attributes FIRST ---
         self.MAIN_LEXICON = {}
         self.USER_MAP = {}
@@ -457,6 +478,56 @@ class SinhalaWordApp(QMainWindow):
 
         # Save preferences
         config.save_user_preferences(self.preferences)
+        
+    def change_font_family(self, font_name):
+        """Change the font family for the editor."""
+        if not font_name:
+            return
+            
+        # Create a new font with the selected family and current size
+        current_size = self.base_font.pointSize()
+        new_font = QFont(font_name, current_size)
+        
+        # Apply to editor
+        self.editor.setFont(new_font)
+        
+        # Apply to suggestion area
+        self.suggestion_area.setFont(new_font)
+        
+        # Update base font
+        self.base_font = new_font
+        
+        # Update preferences
+        self.preferences["font"] = font_name
+        config.save_user_preferences(self.preferences)
+        
+    def change_font_size(self, size_text):
+        """Change the font size for the editor."""
+        try:
+            # Convert size text to float
+            size = float(size_text)
+            if size <= 0:
+                return
+                
+            # Create a new font with the current family and selected size
+            font_name = self.base_font.family()
+            new_font = QFont(font_name, size)
+            
+            # Apply to editor
+            self.editor.setFont(new_font)
+            
+            # Apply to suggestion area
+            self.suggestion_area.setFont(new_font)
+            
+            # Update base font
+            self.base_font = new_font
+            
+            # Update preferences
+            self.preferences["font_size"] = size
+            config.save_user_preferences(self.preferences)
+        except (ValueError, TypeError):
+            # Ignore invalid input
+            pass
 
     def toggle_singlish(self):
         """Toggle Singlish transliteration."""
@@ -517,27 +588,47 @@ class SinhalaWordApp(QMainWindow):
         self.formatting_toolbar = self.addToolBar("Formatting")
         self.formatting_toolbar.setObjectName("FormattingToolbar")
 
-        # Font Family ComboBox
-        font_combo = QFontComboBox(self)
-        font_combo.currentFontChanged.connect(self.editor.setCurrentFont)
-        self.formatting_toolbar.addWidget(font_combo)
+        # Custom Font ComboBox for Sinhala fonts
+        self.font_combo = QComboBox(self)
+        
+        # Add Sinhala fonts from our fonts directory
+        if self.sinhala_font_families:
+            self.font_combo.addItems(self.sinhala_font_families)
+        else:
+            # Fallback to system fonts that support Sinhala
+            default_fonts = ["Iskoola Pota", "Nirmala UI", "Latha"]
+            for font in default_fonts:
+                self.font_combo.addItem(font)
+        
+        # Set current font from preferences or use first available Sinhala font
+        current_font_name = self.preferences["font"]
+        current_font_index = self.font_combo.findText(current_font_name)
+        if current_font_index >= 0:
+            self.font_combo.setCurrentIndex(current_font_index)
+        
+        # Connect font change signal to update editor font
+        self.font_combo.currentTextChanged.connect(self.change_font_family)
+        self.formatting_toolbar.addWidget(self.font_combo)
 
         # Font Size ComboBox
-        size_combo = QComboBox(self)
-        size_combo.setEditable(True)
+        self.size_combo = QComboBox(self)
+        self.size_combo.setEditable(True)
+        
         # Populate with common font sizes
         sizes = config.FONT_SIZES
-        size_combo.addItems([str(s) for s in sizes])
+        self.size_combo.addItems([str(s) for s in sizes])
+        
         # Set default size
-        default_size_index = sizes.index(self.base_font.pointSize()) if self.base_font.pointSize() in sizes else -1
+        current_size = self.base_font.pointSize()
+        default_size_index = sizes.index(current_size) if current_size in sizes else -1
         if default_size_index != -1:
-             size_combo.setCurrentIndex(default_size_index)
+             self.size_combo.setCurrentIndex(default_size_index)
         else:
-             size_combo.setCurrentText(str(self.base_font.pointSize()))
+             self.size_combo.setCurrentText(str(current_size))
 
-        size_combo.currentIndexChanged.connect(lambda index: self.editor.setFontPointSize(float(size_combo.currentText())))
-        size_combo.editTextChanged.connect(lambda text: self.editor.setFontPointSize(float(text) if text else self.base_font.pointSize())) # Handle empty input
-        self.formatting_toolbar.addWidget(size_combo)
+        # Connect size change signals
+        self.size_combo.currentTextChanged.connect(self.change_font_size)
+        self.formatting_toolbar.addWidget(self.size_combo)
 
         # --- Feature Toggles Toolbar ---
         self.toggles_toolbar = self.addToolBar("Features")

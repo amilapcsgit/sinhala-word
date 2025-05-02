@@ -1,10 +1,10 @@
 {
     "theme": "light",
     "font": "Iskoola Pota",
-    "font_size": 14,
+    "font_size": 20,
     "window_size": [
-        1100,
-        780
+        1920,
+        1027
     ],
     "show_keyboard": true,
     "show_suggestions": true,

@@ -1,10 +1,10 @@
 {
-    "theme": "light",
-    "font": "AF Sigiri",
-    "font_size": 48.0,
+    "theme": "dark",
+    "font": "Bhashitha2Sans",
+    "font_size": 22,
     "window_size": [
-        1920,
-        1027
+        1030,
+        832
     ],
     "show_keyboard": true,
     "show_suggestions": true,

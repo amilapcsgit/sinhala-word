@@ -112,6 +112,22 @@ class ThemeManager:
                 background-color: #444444;
                 color: #FFFFFF;
                 border: 1px solid #666666;
+                padding: 1px 18px 1px 3px;
+                min-width: 6em;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left: 1px solid #666666;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #444444;
+                color: #FFFFFF;
+                border: 1px solid #666666;
+                selection-background-color: #264F78;
+                selection-color: #FFFFFF;
+                outline: 0px;
             }
             QStatusBar {
                 background-color: #333333;
@@ -201,6 +217,22 @@ class ThemeManager:
                 background-color: #FFFFFF;
                 color: #333333;
                 border: 1px solid #CCCCCC;
+                padding: 1px 18px 1px 3px;
+                min-width: 6em;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left: 1px solid #CCCCCC;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                color: #333333;
+                border: 1px solid #CCCCCC;
+                selection-background-color: #E2E2E2;
+                selection-color: #333333;
+                outline: 0px;
             }
             QStatusBar {
                 background-color: #F0F0F0;

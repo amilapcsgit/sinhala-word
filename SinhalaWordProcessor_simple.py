@@ -33,7 +33,8 @@ import logging
 from PySide6.QtWidgets import (
     QApplication, QTextEdit, QFileDialog, QToolBar, QWidget, QVBoxLayout,
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
-    QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy
+    QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy,
+    QStyledItemDelegate
 )
 from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase, QFontDatabase, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
@@ -57,6 +58,16 @@ logger = logging.getLogger("SinhalaWordProcessor")
 #  Constants & Global Helpers
 # ------------------------------------------------------------------
 WORD_PATTERN = re.compile(r'\b\w+\b')  # Compiled regex for word counting
+
+# Custom delegate for better rendering of font sizes in dropdown
+class FontSizeDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+    
+    def paint(self, painter, option, index):
+        # Ensure text is centered and properly sized
+        option.displayAlignment = Qt.AlignCenter
+        super().paint(painter, option, index)
 
 # Path to the fonts directory - use absolute path to ensure it works correctly
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
@@ -253,6 +264,9 @@ class SinhalaWordApp(QMainWindow):
 
         # Apply initial theme
         self.setStyleSheet(self.theme_manager.get_stylesheet())
+        
+        # Update combo box styles based on theme
+        self.update_combo_box_styles()
 
         # --- Finalize UI Setup ---
         # Create a central widget and layout to hold the editor and suggestion area
@@ -655,6 +669,9 @@ class SinhalaWordApp(QMainWindow):
         # Font Size ComboBox
         self.size_combo = QComboBox(self)
         self.size_combo.setEditable(True)
+        self.size_combo.setMinimumWidth(70)  # Ensure enough width to display numbers
+        self.size_combo.setMaxVisibleItems(10)  # Limit visible items to prevent excessive scrolling
+        self.size_combo.setMaxCount(len(config.FONT_SIZES))  # Limit total items
         
         # Populate with common font sizes
         sizes = config.FONT_SIZES
@@ -667,6 +684,19 @@ class SinhalaWordApp(QMainWindow):
              self.size_combo.setCurrentIndex(default_size_index)
         else:
              self.size_combo.setCurrentText(str(current_size))
+
+        # Add custom styling for better appearance
+        self.size_combo.setStyleSheet("""
+            QComboBox { 
+                padding-right: 15px; 
+            }
+            QComboBox::item {
+                padding: 3px;
+            }
+        """)
+        
+        # Apply custom delegate for better rendering
+        self.size_combo.setItemDelegate(FontSizeDelegate(self.size_combo))
 
         # Connect size change signals
         self.size_combo.currentTextChanged.connect(self.change_font_size)
@@ -708,6 +738,118 @@ class SinhalaWordApp(QMainWindow):
         self.toggles_toolbar.addAction(self.suggestions_toggle_action)
         self.toggles_toolbar.addSeparator()
         self.toggles_toolbar.addAction(self.toggle_theme_action)
+        
+    def change_font_size(self, size_text):
+        """Change the font size of the editor."""
+        try:
+            # Convert the size text to an integer
+            size = int(size_text)
+            
+            # Update the font
+            self.base_font.setPointSize(size)
+            self.editor.setFont(self.base_font)
+            self.suggestion_area.setFont(self.base_font)
+            
+            # Update preferences
+            self.preferences["font_size"] = size
+            config.save_user_preferences(self.preferences)
+            
+            # Log the change
+            logging.info(f"Font size changed to {size}")
+        except ValueError:
+            # Handle invalid input
+            logging.warning(f"Invalid font size: {size_text}")
+            
+            # Reset to current size
+            current_size = self.base_font.pointSize()
+            self.size_combo.setCurrentText(str(current_size))
+            
+    def change_font_family(self, font_name):
+        """Change the font family of the editor."""
+        # Update the font
+        self.base_font.setFamily(font_name)
+        self.editor.setFont(self.base_font)
+        self.suggestion_area.setFont(self.base_font)
+        
+        # Update preferences
+        self.preferences["font"] = font_name
+        config.save_user_preferences(self.preferences)
+        
+        # Log the change
+        logging.info(f"Font family changed to {font_name}")
+        
+    def update_combo_box_styles(self):
+        """Update combo box styles based on current theme."""
+        is_dark = self.theme_manager.is_dark_mode()
+        
+        # Define colors based on theme
+        if is_dark:
+            dropdown_bg = "#444444"
+            dropdown_fg = "#FFFFFF"
+            dropdown_border = "#666666"
+            selection_bg = "#264F78"
+            selection_fg = "#FFFFFF"
+        else:
+            dropdown_bg = "#FFFFFF"
+            dropdown_fg = "#333333"
+            dropdown_border = "#CCCCCC"
+            selection_bg = "#E2E2E2"
+            selection_fg = "#333333"
+        
+        # Apply styles to font size combo box
+        if hasattr(self, 'size_combo'):
+            self.size_combo.setStyleSheet(f"""
+                QComboBox {{ 
+                    background-color: {dropdown_bg};
+                    color: {dropdown_fg};
+                    border: 1px solid {dropdown_border};
+                    padding-right: 15px;
+                    padding-left: 5px;
+                }}
+                QComboBox::drop-down {{
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 15px;
+                    border-left: 1px solid {dropdown_border};
+                }}
+                QComboBox::item {{
+                    padding: 3px;
+                    background-color: {dropdown_bg};
+                    color: {dropdown_fg};
+                }}
+                QComboBox QAbstractItemView {{
+                    background-color: {dropdown_bg};
+                    color: {dropdown_fg};
+                    border: 1px solid {dropdown_border};
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_fg};
+                    outline: 0px;
+                }}
+            """)
+            
+    def toggle_theme(self):
+        """Toggle between light and dark themes."""
+        # Toggle theme using theme manager
+        theme, stylesheet = self.theme_manager.toggle_theme()
+        
+        # Update application stylesheet
+        self.setStyleSheet(stylesheet)
+        
+        # Update theme label in status bar
+        self.themeLbl.setText("🌙 Dark" if theme == "dark" else "☀️ Light")
+        
+        # Update keyboard theme
+        self.keyboard_area.set_dark_mode(theme == "dark")
+        
+        # Update combo box styles
+        self.update_combo_box_styles()
+        
+        # Update preferences
+        self.preferences["theme"] = theme
+        config.save_user_preferences(self.preferences)
+        
+        # Log theme change
+        logging.info(f"Theme changed to {theme}")
 
     def update_recent_files_menu(self):
         """Update the recent files menu with the latest files."""

@@ -157,38 +157,10 @@ class SinhalaInputHandler(QObject):
         if not self.enabled:
             return char
             
-        if char == "Space":
-            if self.suggestions_enabled and self.current_suggestions:
-                self.accept_suggestion(self.current_suggestions[0])
-                return " "
-            else:
-                if self.buffer:
-                    self.commit_buffer()
-                return " "
-                
-        elif char == "Backspace":
-            if self.buffer:
-                self.buffer.pop()
-                if self.buffer and self.suggestions_enabled:
-                    self.update_suggestions()
-                else:
-                    self.clear_suggestions()
-            return None  # Let the caller handle the backspace
-            
-        else:
-            # For any other character
-            if char.isalnum() and len(char) == 1:
-                if not self.buffer:
-                    self.word_start_pos = cursor_position
-                self.buffer.append(char)
-                if self.suggestions_enabled:
-                    self.update_suggestions()
-            else:
-                # For non-alphanumeric characters, commit the buffer
-                if self.buffer:
-                    self.commit_buffer()
-                    
-            return char
+        # For Space, Backspace, and other characters, just return the character
+        # and let the main application handle the buffer and suggestions
+        # This matches the behavior in SinhalaWordProcessor_enhanced.py
+        return char
             
     def update_suggestions(self):
         """Update suggestions based on the current buffer."""

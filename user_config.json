@@ -1,13 +1,13 @@
 {
-    "theme": "light",
-    "font": "Hodipotha",
+    "theme": "dark",
+    "font": "UN-Ganganee",
     "font_size": 24,
     "window_size": [
         1920,
         1137
     ],
     "show_keyboard": true,
-    "show_suggestions": true,
+    "show_suggestions": false,
     "singlish_enabled": true,
     "recent_files": [
         "C:/sinhala word/sinhala word working output.txt"

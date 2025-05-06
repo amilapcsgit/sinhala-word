@@ -16,12 +16,12 @@ pip install PySide6 PySide6-Fluent-Widgets
 
 Run:
 ```bash
-python SinhalaWordProcessor_enhanced.py
+python SinhalaWordProcessor_simple.py
 ```
 
 Pack as EXE:
 ```bash
-pyinstaller --noconfirm --onefile --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor_enhanced.py
+pyinstaller --noconfirm --onefile --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor_simple.py
 ```
 """
 import sys
@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy,
     QStyledItemDelegate, QMenu
 )
-from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase, QFontDatabase, QFontDatabase
+from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 
 # Import our custom modules
@@ -207,10 +207,30 @@ class SinhalaWordApp(QMainWindow):
         super().__init__()
 
         # --- Suggestion Area (Fixed) ---
-        self.suggestion_area = QTextEdit(self)
-        self.suggestion_area.setReadOnly(True)
-        self.suggestion_area.setFixedHeight(50) # Adjust height as needed
-        self.suggestion_area.setFont(self.base_font) # Use same font
+        # Create a simple text label for suggestions - empty by default
+        self.suggestion_label = QLabel("")
+        self.suggestion_label.setObjectName("suggestion_label")
+        self.suggestion_label.setMinimumHeight(50)  # Minimum height
+        self.suggestion_label.setMaximumHeight(100) # Maximum height
+        self.suggestion_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.suggestion_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.suggestion_label.setFont(self.base_font)
+        self.suggestion_label.setWordWrap(True)
+        self.suggestion_label.setTextFormat(Qt.RichText)
+        self.suggestion_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self.suggestion_label.setOpenExternalLinks(False)
+        
+        # Apply Windows 11 styling
+        self.update_suggestion_label_style()
+        
+        # Connect the linkActivated signal
+        self.suggestion_label.linkActivated.connect(self.on_suggestion_link_clicked)
+        
+        # Make sure the suggestion area is visible if suggestions are enabled
+        self.suggestion_label.setVisible(self.preferences["show_suggestions"])
+        
+        # Log that we've created the suggestion area
+        logger.info("Created suggestion label")
 
         # --- Basic Window Setup ---
         self.setWindowTitle("Sinhala Word Processor")
@@ -276,7 +296,12 @@ class SinhalaWordApp(QMainWindow):
         # Create a central widget and layout to hold the editor and suggestion area
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-        main_layout.addWidget(self.suggestion_area) # Add suggestion area above editor
+        
+        # Add suggestion label above editor with proper visibility
+        main_layout.addWidget(self.suggestion_label)
+        logger.info(f"Added suggestion label to main layout, visible: {self.suggestion_label.isVisible()}")
+        
+        # Add editor
         main_layout.addWidget(self.editor)
 
         # Add keyboard area with fixed height
@@ -287,11 +312,15 @@ class SinhalaWordApp(QMainWindow):
         keyboard_layout.setContentsMargins(2, 2, 2, 2)
         main_layout.addWidget(keyboard_container)
 
+        # Configure layout properties
         main_layout.setContentsMargins(0, 0, 0, 0) # Remove margins
         main_layout.setSpacing(2)  # Reduce spacing between widgets
 
         # Set the central widget
         self.setCentralWidget(central_widget)
+        
+        # Force layout update
+        central_widget.updateGeometry()
 
         # Install event filter *after* editor exists and super().__init__ is done
         # Install event filter directly on the editor widget
@@ -397,6 +426,33 @@ class SinhalaWordApp(QMainWindow):
         else:
             QMessageBox.warning(self, "Warning", "Please select a word first")
 
+    @Slot(str)
+    def on_suggestion_link_clicked(self, link):
+        """Handle clicks on suggestion links."""
+        try:
+            # Convert the link to an index
+            index = int(link)
+            
+            if index >= len(self.current_suggestions):
+                logger.error(f"Link index {index} out of range (max: {len(self.current_suggestions)-1})")
+                return
+                
+            # Get the suggestion
+            sinhala_word = self.current_suggestions[index]
+            
+            # Log the selection
+            logger.info(f"Clicked suggestion link {index+1}: '{sinhala_word}'")
+            
+            # Accept the suggestion
+            self.accept_suggestion(sinhala_word)
+            
+        except Exception as e:
+            logger.error(f"Error in on_suggestion_link_clicked: {e}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            self.reset_input_state()
+    
     def on_keyboard_button_clicked(self, char):
         """Handles clicks on the on-screen keyboard buttons."""
         try:
@@ -498,27 +554,7 @@ class SinhalaWordApp(QMainWindow):
         self.addAction(self.redo_action)
         self.addAction(self.toggle_theme_action)
 
-    def toggle_theme(self):
-        """Toggle between light and dark themes."""
-        # Use the theme manager to toggle theme and get the new stylesheet
-        theme, stylesheet = self.theme_manager.toggle_theme()
-
-        # Update the theme label
-        if theme == "dark":
-            self.themeLbl.setText("🌙 Dark")
-            # Set dark mode for the keyboard
-            self.keyboard_area.set_dark_mode(True)
-        else:
-            self.themeLbl.setText("☀️ Light")
-            # Set light mode for the keyboard
-            self.keyboard_area.set_dark_mode(False)
-
-        # Apply the stylesheet
-        self.setStyleSheet(stylesheet)
-
-        # Save the theme preference
-        self.preferences["theme"] = theme
-        config.save_user_preferences(self.preferences)
+# This is a duplicate method - removing it
 
     def toggle_toolbars(self):
         """Toggle visibility of toolbars."""
@@ -626,15 +662,19 @@ class SinhalaWordApp(QMainWindow):
         # Update action text based on checked state
         if self.suggestions_toggle_action.isChecked():
             self.suggestions_toggle_action.setText("Suggestions: On")
-            # Show suggestion area if there are suggestions
+            # Show suggestion label if there are suggestions
+            self.suggestion_label.setVisible(True)
             if self.buffer:
                 self.update_suggestion_area()
             self.preferences["show_suggestions"] = True
+            logger.info("Suggestions enabled")
         else:
             self.suggestions_toggle_action.setText("Suggestions: Off")
-            # Hide suggestion area
+            # Hide suggestion label
             self.clear_suggestion_area()
+            self.suggestion_label.setVisible(False)
             self.preferences["show_suggestions"] = False
+            logger.info("Suggestions disabled")
 
         # Save preferences
         config.save_user_preferences(self.preferences)
@@ -810,7 +850,7 @@ class SinhalaWordApp(QMainWindow):
                 # No selection, update the default font for future text
                 self.base_font.setPointSize(size)
                 self.editor.setFont(self.base_font)
-                self.suggestion_area.setFont(self.base_font)
+                self.suggestion_label.setFont(self.base_font)
                 
                 # Update preferences
                 self.preferences["font_size"] = size
@@ -841,7 +881,7 @@ class SinhalaWordApp(QMainWindow):
             # No selection, update the default font for future text
             self.base_font.setFamily(font_name)
             self.editor.setFont(self.base_font)
-            self.suggestion_area.setFont(self.base_font)
+            self.suggestion_label.setFont(self.base_font)
             
             # Update preferences
             self.preferences["font"] = font_name
@@ -917,51 +957,61 @@ class SinhalaWordApp(QMainWindow):
         """Update combo box styles based on current theme."""
         is_dark = self.theme_manager.is_dark_mode()
         
-        # Define colors based on theme
+        # Get colors from theme manager
         if is_dark:
-            dropdown_bg = "#444444"
-            dropdown_fg = "#FFFFFF"
-            dropdown_border = "#666666"
-            selection_bg = "#1A1A1A"  # Darker selection background
-            selection_fg = "#FFFFFF"
+            dropdown_bg = self.theme_manager.get_color("SecondaryBackgroundColor")
+            dropdown_fg = self.theme_manager.get_color("PrimaryForegroundColor")
+            dropdown_border = self.theme_manager.get_color("StrokeColor")
+            selection_bg = self.theme_manager.get_color("SelectedColor")
+            selection_fg = self.theme_manager.get_color("PrimaryForegroundColor")
         else:
-            dropdown_bg = "#FFFFFF"
-            dropdown_fg = "#333333"
-            dropdown_border = "#CCCCCC"
-            selection_bg = "#E2E2E2"
-            selection_fg = "#333333"
+            dropdown_bg = self.theme_manager.get_color("PrimarySolidBackgroundColor")
+            dropdown_fg = self.theme_manager.get_color("PrimaryForegroundColor")
+            dropdown_border = self.theme_manager.get_color("StrokeColor")
+            selection_bg = self.theme_manager.get_color("SelectedColor")
+            selection_fg = self.theme_manager.get_color("PrimaryForegroundColor")
+        
+        # Common combo box style
+        combo_style = f"""
+            QComboBox {{ 
+                background-color: {dropdown_bg};
+                color: {dropdown_fg};
+                border: 1px solid {dropdown_border};
+                padding-right: 12px;
+                padding-left: 2px;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left: 1px solid {dropdown_border};
+            }}
+            QComboBox::item {{
+                padding: 3px;
+                background-color: {dropdown_bg};
+                color: {dropdown_fg};
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {dropdown_bg};
+                color: {dropdown_fg};
+                border: 1px solid {dropdown_border};
+                selection-background-color: {selection_bg};
+                selection-color: {selection_fg};
+                outline: 0px;
+            }}
+        """
         
         # Apply styles to font size combo box
         if hasattr(self, 'size_combo'):
-            self.size_combo.setStyleSheet(f"""
-                QComboBox {{ 
-                    background-color: {dropdown_bg};
-                    color: {dropdown_fg};
-                    border: 1px solid {dropdown_border};
-                    padding-right: 12px;
-                    padding-left: 2px;
+            self.size_combo.setStyleSheet(combo_style + """
+                QComboBox { 
                     text-align: center;
-                }}
-                QComboBox::drop-down {{
-                    subcontrol-origin: padding;
-                    subcontrol-position: top right;
-                    width: 15px;
-                    border-left: 1px solid {dropdown_border};
-                }}
-                QComboBox::item {{
-                    padding: 3px;
-                    background-color: {dropdown_bg};
-                    color: {dropdown_fg};
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: {dropdown_bg};
-                    color: {dropdown_fg};
-                    border: 1px solid {dropdown_border};
-                    selection-background-color: {selection_bg};
-                    selection-color: {selection_fg};
-                    outline: 0px;
-                }}
+                }
             """)
+            
+        # Apply styles to font combo box
+        if hasattr(self, 'font_combo'):
+            self.font_combo.setStyleSheet(combo_style)
             
     def toggle_theme(self):
         """Toggle between light and dark themes."""
@@ -983,12 +1033,134 @@ class SinhalaWordApp(QMainWindow):
         # Update toolbar and menu icons for the new theme
         self.update_icons_for_theme(theme)
         
+        # Update suggestion label style - this fixes the black suggestion area bug
+        self.update_suggestion_label_style()
+        
+        # Update suggestion buttons if they exist
+        self.update_suggestion_buttons_theme()
+        
+        # Force update of the suggestion label to ensure it refreshes properly
+        self.suggestion_label.update()
+        
+        # Force repaint of the suggestion area to ensure color changes are applied
+        if hasattr(self, 'suggestion_area'):
+            self.suggestion_area.update()
+            self.suggestion_area.repaint()
+        
         # Update preferences
         self.preferences["theme"] = theme
         config.save_user_preferences(self.preferences)
         
         # Log theme change
-        logging.info(f"Theme changed to {theme}")
+        logger.info(f"Theme toggled to {theme} mode with background: {self.theme_manager.get_color('PrimarySolidBackgroundColor')}")
+        config.save_user_preferences(self.preferences)
+        
+    def update_suggestion_label_style(self):
+        """Update the suggestion label styling based on current theme."""
+        # Get colors from theme manager
+        if self.theme_manager.is_dark_mode():
+            # Dark theme colors from Windows 11 Fluent UI
+            bg_color = self.theme_manager.get_color("OverlayColor")
+            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
+            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
+        else:
+            # Light theme colors from Windows 11 Fluent UI
+            bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
+            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
+            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
+        
+        # Apply the styling with improved padding and border
+        self.suggestion_label.setStyleSheet(f"""
+            QLabel#suggestion_label {{
+                background-color: {bg_color}; 
+                color: {text_color};
+                border: 1px solid {border_color}; 
+                border-radius: 10px;
+                padding: 10px;
+                margin: 2px;
+            }}
+        """)
+        
+        # Log the theme update
+        logger.info(f"Updated suggestion label style for {self.theme_manager.current_theme} theme with bg: {bg_color}, text: {text_color}")
+            
+    def update_suggestion_buttons_theme(self):
+        """Update the theme of suggestion buttons."""
+        if not hasattr(self, 'suggestion_buttons'):
+            return
+            
+        # Update the suggestion label style
+        self.update_suggestion_label_style()
+            
+        # If no buttons, just return after updating the area
+        if not self.suggestion_buttons:
+            return
+            
+        # Get colors from theme manager
+        if self.theme_manager.is_dark_mode():
+           # Dark theme colors from Windows 11 Fluent UI
+            bg_color = self.theme_manager.get_color("OverlayColor")
+            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
+            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
+            hover_bg_color = self.theme_manager.get_color("MouseOverBackgroundColor")
+            hover_border_color = self.theme_manager.get_color("AccentColor")
+            pressed_bg_color = self.theme_manager.get_color("AccentPressedColor")
+            pressed_text_color = self.theme_manager.get_color("AccentControlForegroundColor")
+        else:
+            # Light theme colors from Windows 11 Fluent UI
+            bg_color = self.theme_manager.get_color("SecondaryBackgroundColor")
+            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
+            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
+            hover_bg_color = self.theme_manager.get_color("MouseOverBackgroundColor")
+            hover_border_color = self.theme_manager.get_color("AccentColor")
+            pressed_bg_color = self.theme_manager.get_color("AccentPressedColor")
+            pressed_text_color = self.theme_manager.get_color("AccentControlForegroundColor")
+            
+        # Create style strings
+        button_style = f"""
+            background-color: {bg_color};
+            color: {text_color};
+            border: 1px solid {border_color};
+            border-radius: 4px;
+            padding: 4px 8px;
+            text-align: left;
+        """
+        button_hover_style = f"""
+            background-color: {hover_bg_color};
+            border: 1px solid {hover_border_color};
+        """
+        button_pressed_style = f"""
+            background-color: {pressed_bg_color};
+            color: {pressed_text_color};
+         """
+            
+        # Apply the style to all suggestion buttons
+        for button in self.suggestion_buttons:
+            # Apply the style directly to the button
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    {button_style}
+                }}
+                QPushButton:hover {{
+                    {button_hover_style}
+                }}
+                QPushButton:pressed {{
+                    {button_pressed_style}
+                }}
+            """)
+            
+            # Make sure the button is visible
+            button.setVisible(True)
+            
+            # Log button styling
+            logger.info(f"Applied theme to button: {button.text()}")
+            
+        # Save current theme to preferences
+        current_theme = "dark" if self.theme_manager.is_dark_mode() else "light"
+        self.preferences["theme"] = current_theme
+        
+        # Log theme change
+        logger.info(f"Updated suggestion buttons for {current_theme} theme")
         
     def update_icons_for_theme(self, theme):
         """Update all toolbar and menu icons for the current theme."""
@@ -1396,8 +1568,8 @@ class SinhalaWordApp(QMainWindow):
             if not singlish_enabled:
                 return False
 
-            # If suggestion area is visible, handle selection keys
-            if suggestions_enabled and self.suggestion_area.isVisible() and self.current_suggestions:
+            # If suggestion label is visible, handle selection keys
+            if suggestions_enabled and self.suggestion_label.isVisible() and self.current_suggestions:
                 if key in (Qt.Key_Return, Qt.Key_Enter):
                     # Accept the first suggestion on Enter
                     try:
@@ -1456,6 +1628,9 @@ class SinhalaWordApp(QMainWindow):
                             return True # Consume number key
                         except Exception as e:
                             logger.error(f"Error handling number key: {e}")
+                            logger.error(f"Exception details: {str(e)}")
+                            import traceback
+                            logger.error(f"Traceback: {traceback.format_exc()}")
                             self.reset_input_state()
                             return False
 
@@ -1571,16 +1746,25 @@ class SinhalaWordApp(QMainWindow):
             self.reset_input_state()
 
     def update_suggestion_area(self):
-        """Update and show/hide the fixed suggestion area based on the current buffer."""
+        """Update and show/hide the suggestion label based on the current buffer."""
         try:
             # Check if suggestions are enabled
             if hasattr(self, 'suggestions_toggle_action') and not self.suggestions_toggle_action.isChecked():
-                self.clear_suggestion_area()
+                logger.info("Suggestions disabled")
+                self.suggestion_label.setText("")  # Empty text instead of "Suggestions disabled"
+                self.suggestion_label.setVisible(False)
                 return
+            
+            # Calculate dynamic font size based on window width
+            window_width = self.width()
+            # Scale font size between 16 and 24 based on window width (800-1600px)
+            font_size = max(16, min(24, 16 + (window_width - 800) * 8 / 800))
+            logger.info(f"Window width: {window_width}, Font size: {font_size}")
                 
-            # If buffer is empty, clear suggestions
+            # If buffer is empty, show empty suggestion area
             if not self.buffer:
-                self.clear_suggestion_area()
+                logger.info("Buffer is empty, showing empty suggestion area")
+                self.suggestion_label.setText("")  # Empty text instead of placeholder
                 return
                 
             current_word = "".join(self.buffer).lower()
@@ -1590,21 +1774,117 @@ class SinhalaWordApp(QMainWindow):
             
             # Log the suggestions for debugging
             logger.info(f"Suggestions for '{current_word}': {self.current_suggestions}")
-
+            
             if self.current_suggestions:
-                suggestion_text = " ".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(self.current_suggestions)])
-                self.suggestion_area.setPlainText(suggestion_text)
-                self.suggestion_area.show()
+                # Get colors from theme manager for consistent styling
+                if self.theme_manager.is_dark_mode():
+                    # Dark theme colors from Windows 11 Fluent UI
+                    button_bg = self.theme_manager.get_color("OverlayColor")
+                    button_border = self.theme_manager.get_color("PrimarySolidBorderColor")
+                    button_text = self.theme_manager.get_color("PrimaryForegroundColor")
+                    button_hover_bg = self.theme_manager.get_color("MouseOverBackgroundColor")
+                    accent_color = self.theme_manager.get_color("AccentColor")
+                    accent_pressed = self.theme_manager.get_color("AccentPressedColor")
+                else:
+                    # Light theme colors from Windows 11 Fluent UI
+                    button_bg = self.theme_manager.get_color("PrimarySolidBackgroundColor")
+                    button_border = self.theme_manager.get_color("PrimarySolidBorderColor")
+                    button_text = self.theme_manager.get_color("PrimaryForegroundColor")
+                    button_hover_bg = self.theme_manager.get_color("MouseOverBackgroundColor")
+                    accent_color = self.theme_manager.get_color("AccentColor")
+                    accent_pressed = self.theme_manager.get_color("AccentPressedColor")
+                
+                # Create HTML with styled buttons that look like Windows 11 Fluent UI buttons
+                html = f"<div style='display: flex; flex-wrap: wrap; gap: 8px; font-size: {font_size}px; padding: 8px;'>"
+                
+                for i, suggestion in enumerate(self.current_suggestions):
+                    # Create a button-like link with Windows 11 Fluent UI styling
+                    html += f"""
+                    <a href='{i}' style='
+                        display: inline-block;
+                        padding: 8px 16px;
+                        margin: 2px;
+                        background-color: {button_bg};
+                        color: {button_text};
+                        border: 1px solid {button_border};
+                        border-radius: 8px;
+                        text-decoration: none;
+                        min-width: 60px;
+                        text-align: center;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                        transition: all 0.2s ease;
+                    '><span style='color: {accent_color}; font-weight: bold;'>{i+1}.</span> {suggestion}</a>
+                    """
+                
+                html += "</div>"
+                
+                # Add hover and active effects with CSS
+                html += f"""
+                <style>
+                    a:hover {{
+                        background-color: {button_hover_bg} !important;
+                        border-color: {accent_color} !important;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        transform: translateY(-1px);
+                    }}
+                    a:active {{
+                        background-color: {accent_pressed} !important;
+                        color: white !important;
+                        transform: translateY(1px);
+                        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                    }}
+                </style>
+                """
+                
+                # Set the HTML text
+                self.suggestion_label.setText(html)
+                
+                # Log creation
+                logger.info(f"Updated suggestion label with {len(self.current_suggestions)} suggestions")
+                
+                # Make sure the suggestion label is visible
+                self.suggestion_label.setVisible(True)
             else:
-                self.clear_suggestion_area()
+                # Show no suggestions message with theme-appropriate styling
+                if self.theme_manager.is_dark_mode():
+                    text_color = self.theme_manager.get_color("TertiaryForegroundColor")
+                else:
+                    text_color = self.theme_manager.get_color("TertiaryForegroundColor")
+                
+                # Use a more subtle, smaller message
+                self.suggestion_label.setText(f"<div style='text-align: center; color: {text_color}; font-size: {font_size-4}px; padding: 10px;'>No matching suggestions</div>")
+                logger.info("No suggestions available")
+            
         except Exception as e:
             logger.error(f"Error in update_suggestion_area: {e}")
-            self.clear_suggestion_area()
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            self.suggestion_label.setText("Error showing suggestions")
 
     def clear_suggestion_area(self):
-        """Clear the fixed suggestion area content."""
-        self.suggestion_area.setPlainText("") # Clear text content
-        self.current_suggestions = [] # Clear stored suggestions
+        """Clear the suggestion label content."""
+        try:
+            # Reset the label text to empty
+            self.suggestion_label.setText("")
+            
+            # Clear stored suggestions
+            self.current_suggestions = []
+            
+            # Hide the suggestion label if suggestions are disabled
+            if hasattr(self, 'suggestions_toggle_action') and not self.suggestions_toggle_action.isChecked():
+                self.suggestion_label.setVisible(False)
+                logger.info("Suggestion label hidden (suggestions disabled)")
+            
+            # Log that we've cleared the area
+            logger.info("Cleared suggestion area")
+        except Exception as e:
+            logger.error(f"Error in clear_suggestion_area: {e}")
+            # Reset everything to be safe
+            self.current_suggestions = []
+        
+        # Log the clearing
+        logger.info("Cleared suggestion area")
 
     def accept_suggestion(self, sinhala_word):
         """Accept a suggestion and replace the buffered text."""

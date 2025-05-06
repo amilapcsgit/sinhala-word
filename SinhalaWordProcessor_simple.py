@@ -46,6 +46,7 @@ import config
 from transliterator import SinhalaTransliterator
 from spellchecker import SinhalaSpellChecker
 from input_handler import SinhalaInputHandler
+from suggestion_popup import SuggestionPopup
 
 # Set up logging
 logging.basicConfig(
@@ -211,29 +212,13 @@ class SinhalaWordApp(QMainWindow):
         # --- Call Superclass Initializer ---
         super().__init__()
 
-        # --- Suggestion Area (Fixed) ---
-        # Create a simple text label for suggestions - empty by default
-        self.suggestion_label = QLabel("")
-        self.suggestion_label.setObjectName("suggestion_label")
-        self.suggestion_label.setMinimumHeight(60)  # Reduced minimum height for single row
-        self.suggestion_label.setMaximumHeight(100) # Reduced maximum height for single row
-        self.suggestion_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self.suggestion_label.setAlignment(Qt.AlignCenter)  # Center alignment
-        self.suggestion_label.setFont(self.base_font)
-        self.suggestion_label.setWordWrap(False)  # Disable word wrap for horizontal scrolling
-        self.suggestion_label.setTextFormat(Qt.RichText)
-        self.suggestion_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        self.suggestion_label.setOpenExternalLinks(False)
-        self.suggestion_label.setScaledContents(True)  # Allow content scaling
+        # --- Suggestion Popup (Near Cursor) ---
+        # Create a popup widget for suggestions
+        self.suggestion_popup = SuggestionPopup(self)
+        self.suggestion_popup.suggestionSelected.connect(self.accept_suggestion)
         
-        # Apply Windows 11 styling
-        self.update_suggestion_label_style()
-        
-        # Connect the linkActivated signal
-        self.suggestion_label.linkActivated.connect(self.on_suggestion_link_clicked)
-        
-        # Make sure the suggestion area is visible if suggestions are enabled
-        self.suggestion_label.setVisible(self.preferences["show_suggestions"])
+        # Hide the popup initially
+        self.suggestion_popup.hide()
         
         # Log that we've created the suggestion area
         logger.info("Created suggestion label")
@@ -303,9 +288,8 @@ class SinhalaWordApp(QMainWindow):
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         
-        # Add suggestion label above editor with proper visibility
-        main_layout.addWidget(self.suggestion_label)
-        logger.info(f"Added suggestion label to main layout, visible: {self.suggestion_label.isVisible()}")
+        # Note: The suggestion popup is not added to the layout as it's a popup widget
+        logger.info("Created suggestion popup widget")
         
         # Add editor
         main_layout.addWidget(self.editor)
@@ -432,32 +416,9 @@ class SinhalaWordApp(QMainWindow):
         else:
             QMessageBox.warning(self, "Warning", "Please select a word first")
 
-    @Slot(str)
-    def on_suggestion_link_clicked(self, link):
-        """Handle clicks on suggestion links."""
-        try:
-            # Convert the link to an index
-            index = int(link)
-            
-            if index >= len(self.current_suggestions):
-                logger.error(f"Link index {index} out of range (max: {len(self.current_suggestions)-1})")
-                return
-                
-            # Get the suggestion
-            sinhala_word = self.current_suggestions[index]
-            
-            # Log the selection
-            logger.info(f"Clicked suggestion link {index+1}: '{sinhala_word}'")
-            
-            # Accept the suggestion
-            self.accept_suggestion(sinhala_word)
-            
-        except Exception as e:
-            logger.error(f"Error in on_suggestion_link_clicked: {e}")
-            logger.error(f"Exception details: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            self.reset_input_state()
+    # Removed on_suggestion_link_clicked method
+    # as it is no longer needed with the new SuggestionPopup implementation
+    # The SuggestionPopup class handles clicks internally and emits a signal
     
     def on_keyboard_button_clicked(self, char):
         """Handles clicks on the on-screen keyboard buttons."""
@@ -668,17 +629,15 @@ class SinhalaWordApp(QMainWindow):
         # Update action text based on checked state
         if self.suggestions_toggle_action.isChecked():
             self.suggestions_toggle_action.setText("Suggestions: On")
-            # Show suggestion label if there are suggestions
-            self.suggestion_label.setVisible(True)
+            # Show suggestions if there are any in the buffer
             if self.buffer:
                 self.update_suggestion_area()
             self.preferences["show_suggestions"] = True
             logger.info("Suggestions enabled")
         else:
             self.suggestions_toggle_action.setText("Suggestions: Off")
-            # Hide suggestion label
+            # Hide suggestion popup
             self.clear_suggestion_area()
-            self.suggestion_label.setVisible(False)
             self.preferences["show_suggestions"] = False
             logger.info("Suggestions disabled")
 
@@ -856,7 +815,7 @@ class SinhalaWordApp(QMainWindow):
                 # No selection, update the default font for future text
                 self.base_font.setPointSize(size)
                 self.editor.setFont(self.base_font)
-                self.suggestion_label.setFont(self.base_font)
+                # Font for suggestion popup is handled internally
                 
                 # Update preferences
                 self.preferences["font_size"] = size
@@ -887,7 +846,7 @@ class SinhalaWordApp(QMainWindow):
             # No selection, update the default font for future text
             self.base_font.setFamily(font_name)
             self.editor.setFont(self.base_font)
-            self.suggestion_label.setFont(self.base_font)
+            # Font for suggestion popup is handled internally
             
             # Update preferences
             self.preferences["font"] = font_name
@@ -1039,19 +998,17 @@ class SinhalaWordApp(QMainWindow):
         # Update toolbar and menu icons for the new theme
         self.update_icons_for_theme(theme)
         
-        # Update suggestion label style - this fixes the black suggestion area bug
-        self.update_suggestion_label_style()
-        
-        # Update suggestion buttons if they exist
-        self.update_suggestion_buttons_theme()
-        
-        # Force update of the suggestion label to ensure it refreshes properly
-        self.suggestion_label.update()
-        
-        # Force repaint of the suggestion area to ensure color changes are applied
-        if hasattr(self, 'suggestion_area'):
-            self.suggestion_area.update()
-            self.suggestion_area.repaint()
+        # Update suggestion popup theme
+        theme_colors = {
+            "OverlayColor": self.theme_manager.get_color("OverlayColor"),
+            "PrimarySolidBackgroundColor": self.theme_manager.get_color("PrimarySolidBackgroundColor"),
+            "PrimarySolidBorderColor": self.theme_manager.get_color("PrimarySolidBorderColor"),
+            "PrimaryForegroundColor": self.theme_manager.get_color("PrimaryForegroundColor"),
+            "MouseOverBackgroundColor": self.theme_manager.get_color("MouseOverBackgroundColor"),
+            "AccentColor": self.theme_manager.get_color("AccentColor"),
+            "AccentPressedColor": self.theme_manager.get_color("AccentPressedColor")
+        }
+        self.suggestion_popup.update_theme(self.theme_manager.is_dark_mode(), theme_colors)
         
         # Update preferences
         self.preferences["theme"] = theme
@@ -1059,120 +1016,12 @@ class SinhalaWordApp(QMainWindow):
         
         # Log theme change
         logger.info(f"Theme toggled to {theme} mode with background: {self.theme_manager.get_color('PrimarySolidBackgroundColor')}")
-        config.save_user_preferences(self.preferences)
         
-    def update_suggestion_label_style(self):
-        """Update the suggestion label styling based on current theme."""
-        # Get colors from theme manager
-        if self.theme_manager.is_dark_mode():
-            # Dark theme colors from Windows 11 Fluent UI
-            bg_color = self.theme_manager.get_color("OverlayColor")
-            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
-            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-        else:
-            # Light theme colors from Windows 11 Fluent UI
-            bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
-            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
-            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-        
-        # Apply the styling with improved padding and border
-        self.suggestion_label.setStyleSheet(f"""
-            QLabel#suggestion_label {{
-                background-color: {bg_color}; 
-                color: {text_color};
-                border: 1px solid {border_color}; 
-                border-radius: 8px;
-                padding: 8px 4px;
-                margin: 4px;
-            }}
+    # Removed update_suggestion_label_style method
+    # as it is no longer needed with the new SuggestionPopup implementation
             
-            /* Make sure links are properly styled */
-            QLabel#suggestion_label a {{
-                color: {text_color};
-                text-decoration: none;
-            }}
-        """)
-        
-        # Log the theme update
-        logger.info(f"Updated suggestion label style for {self.theme_manager.current_theme} theme with bg: {bg_color}, text: {text_color}")
-            
-    def update_suggestion_buttons_theme(self):
-        """Update the theme of suggestion buttons."""
-        if not hasattr(self, 'suggestion_buttons'):
-            return
-            
-        # Update the suggestion label style
-        self.update_suggestion_label_style()
-            
-        # If no buttons, just return after updating the area
-        if not self.suggestion_buttons:
-            return
-            
-        # Get colors from theme manager
-        if self.theme_manager.is_dark_mode():
-           # Dark theme colors from Windows 11 Fluent UI
-            bg_color = self.theme_manager.get_color("OverlayColor")
-            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
-            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-            hover_bg_color = self.theme_manager.get_color("MouseOverBackgroundColor")
-            hover_border_color = self.theme_manager.get_color("AccentColor")
-            pressed_bg_color = self.theme_manager.get_color("AccentPressedColor")
-            pressed_text_color = self.theme_manager.get_color("AccentControlForegroundColor")
-        else:
-            # Light theme colors from Windows 11 Fluent UI
-            bg_color = self.theme_manager.get_color("SecondaryBackgroundColor")
-            text_color = self.theme_manager.get_color("PrimaryForegroundColor")
-            border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-            hover_bg_color = self.theme_manager.get_color("MouseOverBackgroundColor")
-            hover_border_color = self.theme_manager.get_color("AccentColor")
-            pressed_bg_color = self.theme_manager.get_color("AccentPressedColor")
-            pressed_text_color = self.theme_manager.get_color("AccentControlForegroundColor")
-            
-        # Create style strings
-        button_style = f"""
-            background-color: {bg_color};
-            color: {text_color};
-            border: 1px solid {border_color};
-            border-radius: 4px;
-            padding: 4px 8px;
-            text-align: left;
-        """
-        button_hover_style = f"""
-            background-color: {hover_bg_color};
-            border: 1px solid {hover_border_color};
-        """
-        button_pressed_style = f"""
-            background-color: {pressed_bg_color};
-            color: {pressed_text_color};
-         """
-            
-        # Apply the style to all suggestion buttons
-        for button in self.suggestion_buttons:
-            # Apply the style directly to the button
-            button.setStyleSheet(f"""
-                QPushButton {{
-                    {button_style}
-                }}
-                QPushButton:hover {{
-                    {button_hover_style}
-                }}
-                QPushButton:pressed {{
-                    {button_pressed_style}
-                }}
-            """)
-            
-            # Make sure the button is visible
-            button.setVisible(True)
-            
-            # Log button styling
-            logger.info(f"Applied theme to button: {button.text()}")
-            
-        # Save current theme to preferences
-        current_theme = "dark" if self.theme_manager.is_dark_mode() else "light"
-        self.preferences["theme"] = current_theme
-        
-        # Log theme change
-        logger.info(f"Updated suggestion buttons for {current_theme} theme")
+    # Removed update_suggestion_buttons_theme method
+    # as it is no longer needed with the new SuggestionPopup implementation
         
     def update_icons_for_theme(self, theme):
         """Update all toolbar and menu icons for the current theme."""
@@ -1586,16 +1435,21 @@ class SinhalaWordApp(QMainWindow):
                 self.commit_buffer()
                 return False  # Don't consume the event
                 
-            # If suggestion label is visible, handle selection keys
-            if suggestions_enabled and self.suggestion_label.isVisible() and self.current_suggestions:
+            # If suggestions are enabled and we have suggestions, handle selection keys
+            if suggestions_enabled and self.current_suggestions:
                 if key in (Qt.Key_Return, Qt.Key_Enter):
-                    # Accept the first suggestion on Enter
+                    # Accept the current suggestion on Enter
                     try:
-                        # Make a local copy of the suggestion to avoid race conditions
-                        sinhala_word = self.current_suggestions[0]
+                        # Get the current index from the popup
+                        current_index = self.suggestion_popup.current_index
+                        if current_index >= 0 and current_index < len(self.current_suggestions):
+                            sinhala_word = self.current_suggestions[current_index]
+                        else:
+                            # Default to first suggestion if no current index
+                            sinhala_word = self.current_suggestions[0]
                         
                         # Log the selected suggestion
-                        logger.info(f"Selected first suggestion: '{sinhala_word}'")
+                        logger.info(f"Selected suggestion: '{sinhala_word}'")
                         
                         # Clear suggestions first to avoid race conditions
                         self.clear_suggestion_area()
@@ -1612,7 +1466,15 @@ class SinhalaWordApp(QMainWindow):
                         # Accept the first suggestion on Space and insert a space
                         # This matches the behavior in SinhalaWordProcessor_enhanced.py
                         if self.current_suggestions:
-                            self.accept_suggestion(self.current_suggestions[0])
+                            # Get the current index from the popup
+                            current_index = self.suggestion_popup.current_index
+                            if current_index >= 0 and current_index < len(self.current_suggestions):
+                                sinhala_word = self.current_suggestions[current_index]
+                            else:
+                                # Default to first suggestion if no current index
+                                sinhala_word = self.current_suggestions[0]
+                                
+                            self.accept_suggestion(sinhala_word)
                             self.editor.insertPlainText(" ")
                             return True # Consume Space
                         else:
@@ -1628,6 +1490,26 @@ class SinhalaWordApp(QMainWindow):
                 elif key == Qt.Key_Escape:
                     self.reset_input_state()
                     return True # Consume Escape
+                    
+                elif key == Qt.Key_Tab:
+                    # Navigate to next suggestion
+                    self.suggestion_popup.navigate_next()
+                    return True # Consume Tab
+                    
+                elif key == Qt.Key_Backtab:
+                    # Navigate to previous suggestion
+                    self.suggestion_popup.navigate_previous()
+                    return True # Consume Shift+Tab
+                    
+                elif key == Qt.Key_Down:
+                    # Navigate to next suggestion
+                    self.suggestion_popup.navigate_next()
+                    return True # Consume Down arrow
+                    
+                elif key == Qt.Key_Up:
+                    # Navigate to previous suggestion
+                    self.suggestion_popup.navigate_previous()
+                    return True # Consume Up arrow
                     
                 elif Qt.Key_1 <= key <= Qt.Key_9:
                     index = key - Qt.Key_1
@@ -1698,17 +1580,17 @@ class SinhalaWordApp(QMainWindow):
                      self.word_start_pos = self.editor.textCursor().position()
                      
                 self.buffer.append(text)
-                # Do NOT consume the event, let the editor insert the character
+                
+                # Update suggestions immediately after adding to buffer
                 if suggestions_enabled:
                     # Cancel any pending suggestion updates
                     if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
                         self._suggestion_timer.stop()
                     
-                    # Create a new timer with a slightly longer delay
-                    self._suggestion_timer = QTimer()
-                    self._suggestion_timer.setSingleShot(True)
-                    self._suggestion_timer.timeout.connect(self.update_suggestion_area)
-                    self._suggestion_timer.start(30)  # Increased delay for better stability
+                    # Update suggestions immediately
+                    self.update_suggestion_area()
+                
+                # Do NOT consume the event, let the editor insert the character
                 return False
 
             # For any other key (punctuation, symbols, arrows, etc.), commit the current buffer
@@ -1798,25 +1680,18 @@ class SinhalaWordApp(QMainWindow):
             self.reset_input_state()
 
     def update_suggestion_area(self):
-        """Update and show/hide the suggestion label based on the current buffer."""
+        """Update and show/hide the suggestion popup based on the current buffer."""
         try:
             # Check if suggestions are enabled
             if hasattr(self, 'suggestions_toggle_action') and not self.suggestions_toggle_action.isChecked():
                 logger.info("Suggestions disabled")
-                self.suggestion_label.setText("")  # Empty text instead of "Suggestions disabled"
-                self.suggestion_label.setVisible(False)
+                self.suggestion_popup.hide()
                 return
             
-            # Use editor font size for suggestions to maintain consistency
-            editor_font_size = self.editor.font().pointSize()
-            # Ensure minimum readable size
-            font_size = max(editor_font_size, 14)  # Minimum size of 14pt
-            logger.info(f"Using editor font size for suggestions: {font_size}px")
-                
-            # If buffer is empty, show empty suggestion area
+            # If buffer is empty, hide suggestion popup
             if not self.buffer:
-                logger.info("Buffer is empty, showing empty suggestion area")
-                self.suggestion_label.setText("")  # Empty text instead of placeholder
+                logger.info("Buffer is empty, hiding suggestion popup")
+                self.suggestion_popup.hide()
                 return
                 
             current_word = "".join(self.buffer).lower()
@@ -1827,136 +1702,48 @@ class SinhalaWordApp(QMainWindow):
             # Log the suggestions for debugging
             logger.info(f"Suggestions for '{current_word}': {self.current_suggestions}")
             
+            # Get the cursor rectangle to position the popup
+            cursor = self.editor.textCursor()
+            cursor_rect = self.editor.cursorRect(cursor)
+            editor_rect = self.editor.rect()
+            
+            # Update theme colors for the popup
+            theme_colors = {
+                "OverlayColor": self.theme_manager.get_color("OverlayColor"),
+                "PrimarySolidBackgroundColor": self.theme_manager.get_color("PrimarySolidBackgroundColor"),
+                "PrimarySolidBorderColor": self.theme_manager.get_color("PrimarySolidBorderColor"),
+                "PrimaryForegroundColor": self.theme_manager.get_color("PrimaryForegroundColor"),
+                "MouseOverBackgroundColor": self.theme_manager.get_color("MouseOverBackgroundColor"),
+                "AccentColor": self.theme_manager.get_color("AccentColor"),
+                "AccentPressedColor": self.theme_manager.get_color("AccentPressedColor")
+            }
+            
+            # Update the popup theme
+            self.suggestion_popup.update_theme(
+                self.theme_manager.is_dark_mode(),
+                theme_colors
+            )
+            
+            # Show the popup with suggestions
             if self.current_suggestions:
-                # Get colors from theme manager for consistent styling
-                if self.theme_manager.is_dark_mode():
-                    # Dark theme colors from Windows 11 Fluent UI
-                    button_bg = self.theme_manager.get_color("OverlayColor")
-                    button_border = self.theme_manager.get_color("PrimarySolidBorderColor")
-                    button_text = self.theme_manager.get_color("PrimaryForegroundColor")
-                    button_hover_bg = self.theme_manager.get_color("MouseOverBackgroundColor")
-                    accent_color = self.theme_manager.get_color("AccentColor")
-                    accent_pressed = self.theme_manager.get_color("AccentPressedColor")
-                else:
-                    # Light theme colors from Windows 11 Fluent UI
-                    button_bg = self.theme_manager.get_color("PrimarySolidBackgroundColor")
-                    button_border = self.theme_manager.get_color("PrimarySolidBorderColor")
-                    button_text = self.theme_manager.get_color("PrimaryForegroundColor")
-                    button_hover_bg = self.theme_manager.get_color("MouseOverBackgroundColor")
-                    accent_color = self.theme_manager.get_color("AccentColor")
-                    accent_pressed = self.theme_manager.get_color("AccentPressedColor")
+                # Make sure the editor keeps focus
+                self.editor.setFocus()
                 
-                # Create HTML with styled buttons in a single row
-                # Use a horizontal layout with inline-block elements
-                html = f"""
-                <div style='padding: 5px; text-align: center; white-space: nowrap; overflow-x: auto;'>
-                """
+                # Show the popup with suggestions
+                self.suggestion_popup.show_popup(
+                    self.current_suggestions,
+                    cursor_rect,
+                    editor_rect
+                )
                 
-                # Get the editor font size to match suggestion size with text
-                editor_font_size = self.editor.font().pointSize()
-                suggestion_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
+                # Make sure the editor still has focus after showing popup
+                QTimer.singleShot(10, self.editor.setFocus)
                 
-                # Calculate button width based on number of suggestions
-                # More suggestions = narrower buttons
-                num_suggestions = len(self.current_suggestions)
-                if num_suggestions <= 3:
-                    min_width = 100  # Wider buttons for few suggestions
-                    h_padding = 12
-                elif num_suggestions <= 6:
-                    min_width = 80   # Medium width for moderate number
-                    h_padding = 10
-                else:
-                    min_width = 60   # Narrower for many suggestions
-                    h_padding = 8
-                
-                for i, suggestion in enumerate(self.current_suggestions):
-                    # Create a button-like element with Windows 11 Fluent UI styling
-                    html += f"""
-                    <a href='{i}' class='suggestion-button' style='
-                        display: inline-block;
-                        padding: 6px {h_padding}px;
-                        margin: 0 4px;
-                        background-color: {button_bg};
-                        color: {button_text};
-                        border: 2px solid {button_border};
-                        border-radius: 6px;
-                        text-decoration: none;
-                        min-width: {min_width}px;
-                        text-align: center;
-                        font-weight: normal;
-                        font-size: {suggestion_font_size}px;
-                    '><span style='color: {accent_color}; font-weight: bold;'>{i+1}.</span> {suggestion}</a>
-                    """
-                
-                html += "</div>"
-                
-                # Add hover effect with inline style attributes that will be applied by JavaScript
-                # QLabel supports limited JavaScript for hover effects
-                html += f"""
-                <script type="text/javascript">
-                    var buttons = document.getElementsByClassName('suggestion-button');
-                    for(var i = 0; i < buttons.length; i++) {{
-                        buttons[i].onmouseover = function() {{
-                            this.style.backgroundColor = '{button_hover_bg}';
-                            this.style.borderColor = '{accent_color}';
-                            this.style.fontWeight = 'bold';
-                        }};
-                        buttons[i].onmouseout = function() {{
-                            this.style.backgroundColor = '{button_bg}';
-                            this.style.borderColor = '{button_border}';
-                            this.style.fontWeight = 'normal';
-                        }};
-                    }}
-                </script>
-                
-                <style>
-                    /* Fallback CSS for hover if JavaScript doesn't work */
-                    a.suggestion-button:hover {{
-                        background-color: {button_hover_bg} !important;
-                        border-color: {accent_color} !important;
-                        font-weight: bold !important;
-                    }}
-                </style>
-                """
-                
-                # Set the HTML text
-                self.suggestion_label.setText(html)
-                
-                # Log creation
-                logger.info(f"Updated suggestion label with {len(self.current_suggestions)} suggestions")
-                
-                # Make sure the suggestion label is visible
-                self.suggestion_label.setVisible(True)
+                logger.info(f"Showing suggestion popup with {len(self.current_suggestions)} suggestions")
             else:
-                # Show no suggestions message with theme-appropriate styling
-                if self.theme_manager.is_dark_mode():
-                    text_color = self.theme_manager.get_color("TertiaryForegroundColor")
-                    bg_color = self.theme_manager.get_color("OverlayColor")
-                    border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-                else:
-                    text_color = self.theme_manager.get_color("TertiaryForegroundColor")
-                    bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
-                    border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
-                
-                # Get the editor font size to match suggestion size with text
-                editor_font_size = self.editor.font().pointSize()
-                message_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
-                
-                # Use a more subtle message styled like our buttons
-                self.suggestion_label.setText(f"""
-                <div style='padding: 8px; text-align: center;'>
-                    <span style='
-                        display: inline-block;
-                        padding: 8px 16px;
-                        background-color: {bg_color};
-                        color: {text_color};
-                        border: 1px solid {border_color};
-                        border-radius: 8px;
-                        font-size: {message_font_size}px;
-                    '>No matching suggestions</span>
-                </div>
-                """)
-                logger.info("No suggestions available")
+                # No suggestions available, hide the popup
+                self.suggestion_popup.hide()
+                logger.info("No suggestions available, hiding popup")
             
         except Exception as e:
             logger.error(f"Error in update_suggestion_area: {e}")
@@ -1964,49 +1751,17 @@ class SinhalaWordApp(QMainWindow):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             
-            # Get error message styling colors
-            if self.theme_manager.is_dark_mode():
-                bg_color = self.theme_manager.get_color("OverlayColor")
-                text_color = self.theme_manager.get_color("ValidationColor")  # Use validation/error color
-                border_color = self.theme_manager.get_color("ValidationColor")
-            else:
-                bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
-                text_color = self.theme_manager.get_color("ValidationColor")  # Use validation/error color
-                border_color = self.theme_manager.get_color("ValidationColor")
-                
-            # Get the editor font size to match suggestion size with text
-            editor_font_size = self.editor.font().pointSize()
-            message_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
-            
-            # Show styled error message
-            self.suggestion_label.setText(f"""
-            <div style='padding: 8px; text-align: center;'>
-                <span style='
-                    display: inline-block;
-                    padding: 8px 16px;
-                    background-color: {bg_color};
-                    color: {text_color};
-                    border: 1px solid {border_color};
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: {message_font_size}px;
-                '>Error showing suggestions</span>
-            </div>
-            """)
+            # Hide the popup in case of error
+            self.suggestion_popup.hide()
 
     def clear_suggestion_area(self):
-        """Clear the suggestion label content."""
+        """Hide the suggestion popup and clear stored suggestions."""
         try:
-            # Reset the label text to empty
-            self.suggestion_label.setText("")
+            # Hide the popup
+            self.suggestion_popup.hide()
             
             # Clear stored suggestions
             self.current_suggestions = []
-            
-            # Hide the suggestion label if suggestions are disabled
-            if hasattr(self, 'suggestions_toggle_action') and not self.suggestions_toggle_action.isChecked():
-                self.suggestion_label.setVisible(False)
-                logger.info("Suggestion label hidden (suggestions disabled)")
             
             # Log that we've cleared the area
             logger.info("Cleared suggestion area")

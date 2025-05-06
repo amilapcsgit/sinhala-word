@@ -188,6 +188,11 @@ class SinhalaWordApp(QMainWindow):
         self.buffer = []
         self.word_start_pos = None # Position in the document where the current word started
         self.current_suggestions = [] # Store current suggestions for fixed area
+        
+        # Initialize suggestion timer
+        self._suggestion_timer = QTimer()
+        self._suggestion_timer.setSingleShot(True)
+        self._suggestion_timer.timeout.connect(self.update_suggestion_area)
 
         # --- Theme Manager ---
         self.theme_manager = ThemeManager()
@@ -1574,7 +1579,13 @@ class SinhalaWordApp(QMainWindow):
             # If Singlish is disabled, don't process any special handling
             if not singlish_enabled:
                 return False
-
+                
+            # Handle cursor movement keys - commit buffer if active
+            if key in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End) and self.buffer:
+                logger.info(f"Cursor movement detected with active buffer - committing buffer")
+                self.commit_buffer()
+                return False  # Don't consume the event
+                
             # If suggestion label is visible, handle selection keys
             if suggestions_enabled and self.suggestion_label.isVisible() and self.current_suggestions:
                 if key in (Qt.Key_Return, Qt.Key_Enter):
@@ -1649,7 +1660,15 @@ class SinhalaWordApp(QMainWindow):
                     # After popping, update or clear suggestion area
                     if suggestions_enabled:
                         if self.buffer:
-                            QTimer.singleShot(10, self.update_suggestion_area)
+                            # Cancel any pending suggestion updates
+                            if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
+                                self._suggestion_timer.stop()
+                            
+                            # Create a new timer with a slightly longer delay
+                            self._suggestion_timer = QTimer()
+                            self._suggestion_timer.setSingleShot(True)
+                            self._suggestion_timer.timeout.connect(self.update_suggestion_area)
+                            self._suggestion_timer.start(30)  # Increased delay for better stability
                         else:
                             self.clear_suggestion_area()
                             self.word_start_pos = None
@@ -1664,12 +1683,32 @@ class SinhalaWordApp(QMainWindow):
 
             # Handle alphanumeric keys: append to buffer
             if text.isalnum() and len(text) == 1:
+                # Verify cursor position is where we expect it to be if buffer is not empty
+                if self.buffer and self.word_start_pos is not None:
+                    current_pos = self.editor.textCursor().position()
+                    expected_pos = self.word_start_pos + len(self.buffer)
+                    
+                    # If cursor is not where expected, commit buffer and start a new one
+                    if current_pos != expected_pos:
+                        logger.info(f"Cursor position mismatch: expected {expected_pos}, got {current_pos} - committing buffer")
+                        self.commit_buffer()
+                        self.word_start_pos = self.editor.textCursor().position()
+                
                 if not self.buffer: # If buffer was empty, mark the start position
                      self.word_start_pos = self.editor.textCursor().position()
+                     
                 self.buffer.append(text)
                 # Do NOT consume the event, let the editor insert the character
                 if suggestions_enabled:
-                    QTimer.singleShot(10, self.update_suggestion_area) # Use singleShot to allow editor to process keypress
+                    # Cancel any pending suggestion updates
+                    if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
+                        self._suggestion_timer.stop()
+                    
+                    # Create a new timer with a slightly longer delay
+                    self._suggestion_timer = QTimer()
+                    self._suggestion_timer.setSingleShot(True)
+                    self._suggestion_timer.timeout.connect(self.update_suggestion_area)
+                    self._suggestion_timer.start(30)  # Increased delay for better stability
                 return False
 
             # For any other key (punctuation, symbols, arrows, etc.), commit the current buffer
@@ -1686,9 +1725,15 @@ class SinhalaWordApp(QMainWindow):
             
     def reset_input_state(self):
         """Reset all input state variables to avoid crashes."""
+        # Cancel any pending suggestion updates
+        if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
+            self._suggestion_timer.stop()
+            
         self.buffer.clear()
         self.word_start_pos = None
         self.clear_suggestion_area()
+        
+        logger.info("Input state reset")
         
     def replace_with_suggestion(self, singlish_word):
         """Replace the current buffer text with the selected suggestion."""
@@ -1979,20 +2024,57 @@ class SinhalaWordApp(QMainWindow):
         if self.buffer and self.word_start_pos is not None:
             try:
                 # Log the operation
-                logger.info(f"Accepting suggestion: '{sinhala_word}' to replace buffer: '{''.join(self.buffer)}'")
+                buffer_text = "".join(self.buffer)
+                logger.info(f"Accepting suggestion: '{sinhala_word}' to replace buffer: '{buffer_text}'")
                 
                 cur = self.editor.textCursor()
                 cur.beginEditBlock()
 
-                # Move cursor to the start of the buffered word
-                cur.setPosition(self.word_start_pos)
-                # Select the buffered text
-                buffer_text = "".join(self.buffer)
-                cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(buffer_text))
-                # Remove the buffered text
-                cur.removeSelectedText()
-                # Insert the accepted Sinhala word
-                cur.insertText(sinhala_word)
+                # Get the actual text in the document at the expected position
+                doc = self.editor.document()
+                check_cursor = QTextCursor(doc)
+                check_cursor.setPosition(self.word_start_pos)
+                check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(buffer_text))
+                actual_text = check_cursor.selectedText()
+                
+                # Verify the text matches our buffer before replacing
+                if actual_text == buffer_text:
+                    # Standard replacement as before
+                    cur.setPosition(self.word_start_pos)
+                    cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(buffer_text))
+                    cur.removeSelectedText()
+                    cur.insertText(sinhala_word)
+                    logger.info(f"Text matched buffer - standard replacement performed")
+                else:
+                    # Text doesn't match buffer - use a more robust approach
+                    logger.warning(f"Buffer text '{buffer_text}' doesn't match document text '{actual_text}'")
+                    
+                    # Try to find the buffer text near the current position
+                    current_pos = cur.position()
+                    search_start = max(0, self.word_start_pos - 10)
+                    search_end = min(doc.characterCount(), current_pos + 10)
+                    
+                    # Create a cursor for searching
+                    search_cursor = QTextCursor(doc)
+                    search_cursor.setPosition(search_start)
+                    search_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, search_end - search_start)
+                    search_text = search_cursor.selectedText()
+                    
+                    # Try to find the buffer text in the search area
+                    buffer_pos = search_text.find(buffer_text)
+                    if buffer_pos >= 0:
+                        # Found the buffer text, replace it
+                        replace_pos = search_start + buffer_pos
+                        cur.setPosition(replace_pos)
+                        cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(buffer_text))
+                        cur.removeSelectedText()
+                        cur.insertText(sinhala_word)
+                        logger.info(f"Found buffer text at position {replace_pos} - replacement performed")
+                    else:
+                        # Couldn't find the buffer text, just insert at current position
+                        logger.warning(f"Couldn't find buffer text near cursor - inserting at current position")
+                        cur.insertText(sinhala_word)
+                
                 cur.endEditBlock()
 
                 # Clear the buffer and reset word_start_pos
@@ -2003,15 +2085,12 @@ class SinhalaWordApp(QMainWindow):
                 logger.info(f"Successfully accepted suggestion: '{sinhala_word}'")
             except Exception as e:
                 logger.error(f"Error in accept_suggestion: {e}")
+                logger.error(f"Exception details: {str(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 self.reset_input_state()
                 
                 # Clear area after accepting
-                self.clear_suggestion_area()
-            except Exception as e:
-                logger.error(f"Error in accept_suggestion: {e}")
-                # If there's an error, at least clear the buffer and suggestion area
-                self.buffer.clear()
-                self.word_start_pos = None
                 self.clear_suggestion_area()
         else:
             # If there's no buffer or word_start_pos, just clear the suggestion area
@@ -2070,7 +2149,14 @@ class SinhalaWordApp(QMainWindow):
         if event.type() == QEvent.KeyPress and (obj is self.editor or obj is self.editor.viewport()):
              # Pass the event and the object it occurred on to handle_keypress_event
              return self.handle_keypress_event(obj, event)
-
+        
+        # Track cursor position changes when buffer is active
+        elif event.type() == QEvent.MouseButtonPress and (obj is self.editor or obj is self.editor.viewport()) and self.buffer:
+            # If user clicks elsewhere while buffer is active, commit the buffer
+            logger.info("Mouse click detected with active buffer - committing buffer")
+            self.commit_buffer()
+            return False  # Don't consume the event
+            
         # For any other event or object, let the default event filter handle it
         return super().eventFilter(obj, event)
 

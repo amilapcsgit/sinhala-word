@@ -210,15 +210,16 @@ class SinhalaWordApp(QMainWindow):
         # Create a simple text label for suggestions - empty by default
         self.suggestion_label = QLabel("")
         self.suggestion_label.setObjectName("suggestion_label")
-        self.suggestion_label.setMinimumHeight(50)  # Minimum height
-        self.suggestion_label.setMaximumHeight(100) # Maximum height
+        self.suggestion_label.setMinimumHeight(60)  # Reduced minimum height for single row
+        self.suggestion_label.setMaximumHeight(100) # Reduced maximum height for single row
         self.suggestion_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self.suggestion_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.suggestion_label.setAlignment(Qt.AlignCenter)  # Center alignment
         self.suggestion_label.setFont(self.base_font)
-        self.suggestion_label.setWordWrap(True)
+        self.suggestion_label.setWordWrap(False)  # Disable word wrap for horizontal scrolling
         self.suggestion_label.setTextFormat(Qt.RichText)
         self.suggestion_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.suggestion_label.setOpenExternalLinks(False)
+        self.suggestion_label.setScaledContents(True)  # Allow content scaling
         
         # Apply Windows 11 styling
         self.update_suggestion_label_style()
@@ -1075,9 +1076,15 @@ class SinhalaWordApp(QMainWindow):
                 background-color: {bg_color}; 
                 color: {text_color};
                 border: 1px solid {border_color}; 
-                border-radius: 10px;
-                padding: 10px;
-                margin: 2px;
+                border-radius: 8px;
+                padding: 8px 4px;
+                margin: 4px;
+            }}
+            
+            /* Make sure links are properly styled */
+            QLabel#suggestion_label a {{
+                color: {text_color};
+                text-decoration: none;
             }}
         """)
         
@@ -1755,11 +1762,11 @@ class SinhalaWordApp(QMainWindow):
                 self.suggestion_label.setVisible(False)
                 return
             
-            # Calculate dynamic font size based on window width
-            window_width = self.width()
-            # Scale font size between 16 and 24 based on window width (800-1600px)
-            font_size = max(16, min(24, 16 + (window_width - 800) * 8 / 800))
-            logger.info(f"Window width: {window_width}, Font size: {font_size}")
+            # Use editor font size for suggestions to maintain consistency
+            editor_font_size = self.editor.font().pointSize()
+            # Ensure minimum readable size
+            font_size = max(editor_font_size, 14)  # Minimum size of 14pt
+            logger.info(f"Using editor font size for suggestions: {font_size}px")
                 
             # If buffer is empty, show empty suggestion area
             if not self.buffer:
@@ -1794,44 +1801,75 @@ class SinhalaWordApp(QMainWindow):
                     accent_color = self.theme_manager.get_color("AccentColor")
                     accent_pressed = self.theme_manager.get_color("AccentPressedColor")
                 
-                # Create HTML with styled buttons that look like Windows 11 Fluent UI buttons
-                html = f"<div style='display: flex; flex-wrap: wrap; gap: 8px; font-size: {font_size}px; padding: 8px;'>"
+                # Create HTML with styled buttons in a single row
+                # Use a horizontal layout with inline-block elements
+                html = f"""
+                <div style='padding: 5px; text-align: center; white-space: nowrap; overflow-x: auto;'>
+                """
+                
+                # Get the editor font size to match suggestion size with text
+                editor_font_size = self.editor.font().pointSize()
+                suggestion_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
+                
+                # Calculate button width based on number of suggestions
+                # More suggestions = narrower buttons
+                num_suggestions = len(self.current_suggestions)
+                if num_suggestions <= 3:
+                    min_width = 100  # Wider buttons for few suggestions
+                    h_padding = 12
+                elif num_suggestions <= 6:
+                    min_width = 80   # Medium width for moderate number
+                    h_padding = 10
+                else:
+                    min_width = 60   # Narrower for many suggestions
+                    h_padding = 8
                 
                 for i, suggestion in enumerate(self.current_suggestions):
-                    # Create a button-like link with Windows 11 Fluent UI styling
+                    # Create a button-like element with Windows 11 Fluent UI styling
                     html += f"""
-                    <a href='{i}' style='
+                    <a href='{i}' class='suggestion-button' style='
                         display: inline-block;
-                        padding: 8px 16px;
-                        margin: 2px;
+                        padding: 6px {h_padding}px;
+                        margin: 0 4px;
                         background-color: {button_bg};
                         color: {button_text};
-                        border: 1px solid {button_border};
-                        border-radius: 8px;
+                        border: 2px solid {button_border};
+                        border-radius: 6px;
                         text-decoration: none;
-                        min-width: 60px;
+                        min-width: {min_width}px;
                         text-align: center;
-                        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-                        transition: all 0.2s ease;
+                        font-weight: normal;
+                        font-size: {suggestion_font_size}px;
                     '><span style='color: {accent_color}; font-weight: bold;'>{i+1}.</span> {suggestion}</a>
                     """
                 
                 html += "</div>"
                 
-                # Add hover and active effects with CSS
+                # Add hover effect with inline style attributes that will be applied by JavaScript
+                # QLabel supports limited JavaScript for hover effects
                 html += f"""
+                <script type="text/javascript">
+                    var buttons = document.getElementsByClassName('suggestion-button');
+                    for(var i = 0; i < buttons.length; i++) {{
+                        buttons[i].onmouseover = function() {{
+                            this.style.backgroundColor = '{button_hover_bg}';
+                            this.style.borderColor = '{accent_color}';
+                            this.style.fontWeight = 'bold';
+                        }};
+                        buttons[i].onmouseout = function() {{
+                            this.style.backgroundColor = '{button_bg}';
+                            this.style.borderColor = '{button_border}';
+                            this.style.fontWeight = 'normal';
+                        }};
+                    }}
+                </script>
+                
                 <style>
-                    a:hover {{
+                    /* Fallback CSS for hover if JavaScript doesn't work */
+                    a.suggestion-button:hover {{
                         background-color: {button_hover_bg} !important;
                         border-color: {accent_color} !important;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                        transform: translateY(-1px);
-                    }}
-                    a:active {{
-                        background-color: {accent_pressed} !important;
-                        color: white !important;
-                        transform: translateY(1px);
-                        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                        font-weight: bold !important;
                     }}
                 </style>
                 """
@@ -1848,11 +1886,31 @@ class SinhalaWordApp(QMainWindow):
                 # Show no suggestions message with theme-appropriate styling
                 if self.theme_manager.is_dark_mode():
                     text_color = self.theme_manager.get_color("TertiaryForegroundColor")
+                    bg_color = self.theme_manager.get_color("OverlayColor")
+                    border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
                 else:
                     text_color = self.theme_manager.get_color("TertiaryForegroundColor")
+                    bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
+                    border_color = self.theme_manager.get_color("PrimarySolidBorderColor")
                 
-                # Use a more subtle, smaller message
-                self.suggestion_label.setText(f"<div style='text-align: center; color: {text_color}; font-size: {font_size-4}px; padding: 10px;'>No matching suggestions</div>")
+                # Get the editor font size to match suggestion size with text
+                editor_font_size = self.editor.font().pointSize()
+                message_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
+                
+                # Use a more subtle message styled like our buttons
+                self.suggestion_label.setText(f"""
+                <div style='padding: 8px; text-align: center;'>
+                    <span style='
+                        display: inline-block;
+                        padding: 8px 16px;
+                        background-color: {bg_color};
+                        color: {text_color};
+                        border: 1px solid {border_color};
+                        border-radius: 8px;
+                        font-size: {message_font_size}px;
+                    '>No matching suggestions</span>
+                </div>
+                """)
                 logger.info("No suggestions available")
             
         except Exception as e:
@@ -1860,7 +1918,36 @@ class SinhalaWordApp(QMainWindow):
             logger.error(f"Exception details: {str(e)}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            self.suggestion_label.setText("Error showing suggestions")
+            
+            # Get error message styling colors
+            if self.theme_manager.is_dark_mode():
+                bg_color = self.theme_manager.get_color("OverlayColor")
+                text_color = self.theme_manager.get_color("ValidationColor")  # Use validation/error color
+                border_color = self.theme_manager.get_color("ValidationColor")
+            else:
+                bg_color = self.theme_manager.get_color("PrimarySolidBackgroundColor")
+                text_color = self.theme_manager.get_color("ValidationColor")  # Use validation/error color
+                border_color = self.theme_manager.get_color("ValidationColor")
+                
+            # Get the editor font size to match suggestion size with text
+            editor_font_size = self.editor.font().pointSize()
+            message_font_size = max(editor_font_size, 14)  # Minimum size of 14pt
+            
+            # Show styled error message
+            self.suggestion_label.setText(f"""
+            <div style='padding: 8px; text-align: center;'>
+                <span style='
+                    display: inline-block;
+                    padding: 8px 16px;
+                    background-color: {bg_color};
+                    color: {text_color};
+                    border: 1px solid {border_color};
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: {message_font_size}px;
+                '>Error showing suggestions</span>
+            </div>
+            """)
 
     def clear_suggestion_area(self):
         """Clear the suggestion label content."""

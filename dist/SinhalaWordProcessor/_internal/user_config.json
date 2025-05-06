@@ -1,0 +1,13 @@
+{
+    "theme": "light",
+    "font": "Iskoola Pota",
+    "font_size": 14,
+    "window_size": [
+        1100,
+        780
+    ],
+    "show_keyboard": true,
+    "show_suggestions": true,
+    "singlish_enabled": true,
+    "recent_files": []
+}

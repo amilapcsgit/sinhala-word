@@ -34,6 +34,10 @@ ICON_PATHS = {
     'redo': "M 8 3 L 8 1 C 4.134 1 1 4.134 1 8 C 1 11.866 4.134 15 8 15 C 11.033 15 13.541 13.065 13.947 10.189 L 14 10 L 12 10 C 11.627 11.961 10.006 13.5 8 13.5 C 5.519 13.5 3.5 11.481 3.5 9 C 3.5 6.519 5.519 4.5 8 4.5 C 10.006 4.5 11.627 6.039 12 8 L 14 8 L 14 7.811 C 13.541 4.935 11.033 3 8 3 z M 12.5 5 L 15.5 8 L 12.5 11 L 12.5 5 z", # Adjusted arrow and curve
     'theme': "M 8 1 C 4.134 1 1 4.134 1 8 C 1 11.866 4.134 15 8 15 L 8 1 z", # Half circle fill
     'keyboard': "M 2 5 C 2 4.448 2.448 4 3 4 L 13 4 C 13.552 4 14 4.448 14 5 L 14 11 C 14 11.552 13.552 12 13 12 L 3 12 C 2.448 12 2 11.552 2 11 L 2 5 z M 4 6 L 6 6 L 6 7 L 4 7 L 4 6 z M 7 6 L 9 6 L 9 7 L 7 7 L 7 6 z M 10 6 L 12 6 L 12 7 L 10 7 L 10 6 z M 4 8 L 6 8 L 6 9 L 4 9 L 4 8 z M 7 8 L 9 8 L 9 9 L 7 9 L 7 8 z M 10 8 L 12 8 L 12 9 L 10 9 L 10 8 z M 5 10 L 11 10 L 11 11 L 5 11 L 5 10 z",
+    # Text formatting icons
+    'bold': "M 4 2 L 4 14 L 10 14 C 11.657 14 13 12.657 13 11 C 13 9.8 12.326 8.756 11.336 8.219 C 11.758 7.709 12 7.083 12 6.4 C 12 4.525 10.475 3 8.6 3 L 4 3 L 4 2 z M 6 4 L 8.6 4 C 9.37 4 10 4.63 10 5.4 C 10 6.17 9.37 6.8 8.6 6.8 L 6 6.8 L 6 4 z M 6 8.8 L 9 8.8 C 9.77 8.8 10.4 9.43 10.4 10.2 C 10.4 10.97 9.77 11.6 9 11.6 L 6 11.6 L 6 8.8 z",
+    'italic': "M 7 2 L 7 4 L 9 4 L 6 12 L 4 12 L 4 14 L 11 14 L 11 12 L 9 12 L 12 4 L 14 4 L 14 2 L 7 2 z",
+    'underline': "M 4 2 L 4 9 C 4 11.761 6.239 14 9 14 C 11.761 14 14 11.761 14 9 L 14 2 L 12 2 L 12 9 C 12 10.657 10.657 12 9 12 C 7.343 12 6 10.657 6 9 L 6 2 L 4 2 z M 2 15 L 2 16 L 16 16 L 16 15 L 2 15 z",
 }
 
 # Define theme colors
@@ -202,6 +206,22 @@ def create_icon(icon_name, size=32, color=THEME_COLORS['light']):
         painter.drawRect(6, 8, 2, 1.5)
         painter.drawRect(9, 8, 2, 1.5)
         painter.drawRect(4, 10.5, 8, 1.5) # Space bar
+    elif icon_name == "bold":
+        # Draw a bold 'B'
+        painter.setFont(QFont("Arial", 12, QFont.Bold))
+        painter.drawText(QRectF(0, 0, 16, 16), Qt.AlignCenter, "B")
+    elif icon_name == "italic":
+        # Draw an italic 'I'
+        font = QFont("Arial", 12)
+        font.setItalic(True)
+        painter.setFont(font)
+        painter.drawText(QRectF(0, 0, 16, 16), Qt.AlignCenter, "I")
+    elif icon_name == "underline":
+        # Draw an underlined 'U'
+        painter.setFont(QFont("Arial", 12))
+        painter.drawText(QRectF(0, 0, 16, 14), Qt.AlignCenter, "U")
+        # Draw the underline
+        painter.drawLine(4, 14, 12, 14)
     else:
         # Draw a fallback question mark if icon name has no specific drawing
         painter.setFont(QFont("Arial", 10, QFont.Bold))

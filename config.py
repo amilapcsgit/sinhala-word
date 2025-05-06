@@ -1,100 +1,102 @@
-# Configuration settings for the Sinhala Word Processor
+"""
+Configuration settings for the Sinhala Word Processor (PySide6 version)
 
-# List of available fonts
-FONTS = [
-    "Tahoma", "Arial", "Calibri", "Times New Roman", 
-    "Verdana", "Courier New", "Georgia", "Segoe UI"
-]
+This module contains application-wide settings and constants.
+"""
+import os
+import json
+import logging
+
+logger = logging.getLogger("SinhalaWordProcessor.config")
+
+# Application paths
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+USER_CONFIG_FILE = os.path.join(APP_DIR, "user_config.json")
+USER_DICT_FILE = os.path.join(APP_DIR, "sinhalawordmap.json")
+LEXICON_DIR = os.path.join(APP_DIR, "dictionary", "chunks")
+
+# Default font settings
+DEFAULT_FONT = "Iskoola Pota"
+DEFAULT_FONT_SIZE = 14
+DEFAULT_WINDOW_SIZE = (1100, 780)
 
 # Available font sizes
-FONT_SIZES = [
-    "8", "9", "10", "11", "12", "14", "16", "18", 
-    "20", "22", "24", "26", "28", "36", "48", "72"
-]
+FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
 
-# Default font size
-DEFAULT_FONT_SIZE = 14
-
-# Initial window size
-INITIAL_WINDOW_SIZE = (1024, 768)
-
-# Toolbar button configurations
-TOOLBAR_BUTTONS = {
-    'standard': {
-        'new': {'tooltip': 'New'},
-        'open': {'tooltip': 'Open'},
-        'save': {'tooltip': 'Save'},
-        'separator': {},
-        'cut': {'tooltip': 'Cut'},
-        'copy': {'tooltip': 'Copy'},
-        'paste': {'tooltip': 'Paste'},
-        'separator': {},
-        'undo': {'tooltip': 'Undo'},
-        'redo': {'tooltip': 'Redo'},
-    },
-    'formatting': {
-        'bold': {'tooltip': 'Bold'},
-        'italic': {'tooltip': 'Italic'},
-        'underline': {'tooltip': 'Underline'},
-        'separator': {},
-        'align_left': {'tooltip': 'Align Left'},
-        'align_center': {'tooltip': 'Align Center'},
-        'align_right': {'tooltip': 'Align Right'},
-        'separator': {},
-        'bullet_list': {'tooltip': 'Bullet List'},
-    }
+# Default user preferences
+DEFAULT_PREFERENCES = {
+    "theme": "light",
+    "font": DEFAULT_FONT,
+    "font_size": DEFAULT_FONT_SIZE,
+    "window_size": DEFAULT_WINDOW_SIZE,
+    "show_keyboard": True,
+    "show_suggestions": True,
+    "singlish_enabled": True,
+    "recent_files": []
 }
 
-# Color schemes for light and dark themes
-COLOR_SCHEME = {
-    'light': {
-        'window_bg': '#f0f0f0',
-        'window_fg': '#000000',
-        'editor_bg': '#ffffff',
-        'editor_fg': '#000000',
-        'toolbar_bg': '#f5f5f5',
-        'toolbar_fg': '#000000',
-        'statusbar_bg': '#f0f0f0',
-        'statusbar_fg': '#000000',
-        'menu_bg': '#f0f0f0',
-        'menu_fg': '#000000',
-        'suggestion_bg': '#ffffff',
-        'suggestion_fg': '#000000',
-        'button_bg': '#e1e1e1',
-        'button_fg': '#000000',
-        'button_hover': '#d0d0d0',
-        'scrollbar_bg': '#e1e1e1',
-        'scrollbar_fg': '#c0c0c0',
-        'tooltip_bg': '#FFFFE0',
-        'tooltip_fg': '#000000',
-        'ribbon_bg': '#f0f0f0',
-        'ribbon_fg': '#000000',
-        'ribbon_tab_active': '#ffffff',
-        'ribbon_tab_inactive': '#e0e0e0',
-    },
-    'dark': {
-        'window_bg': '#1e1e1e',
-        'window_fg': '#ffffff',
-        'editor_bg': '#2d2d2d',
-        'editor_fg': '#ffffff',
-        'toolbar_bg': '#333333',
-        'toolbar_fg': '#ffffff',
-        'statusbar_bg': '#333333',
-        'statusbar_fg': '#ffffff',
-        'menu_bg': '#333333',
-        'menu_fg': '#ffffff',
-        'suggestion_bg': '#3c3c3c',
-        'suggestion_fg': '#ffffff',
-        'button_bg': '#444444',
-        'button_fg': '#ffffff',
-        'button_hover': '#555555',
-        'scrollbar_bg': '#3c3c3c',
-        'scrollbar_fg': '#555555',
-        'tooltip_bg': '#333333',
-        'tooltip_fg': '#ffffff',
-        'ribbon_bg': '#2d2d2d',
-        'ribbon_fg': '#ffffff',
-        'ribbon_tab_active': '#3c3c3c',
-        'ribbon_tab_inactive': '#2d2d2d',
-    }
-}
+# Maximum number of recent files to remember
+MAX_RECENT_FILES = 10
+
+def load_user_preferences():
+    """
+    Load user preferences from the config file.
+    
+    Returns:
+        dict: User preferences, or default preferences if file not found or invalid
+    """
+    try:
+        if os.path.exists(USER_CONFIG_FILE):
+            with open(USER_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                prefs = json.load(f)
+                logger.info(f"Loaded user preferences from {USER_CONFIG_FILE}")
+                # Ensure all default keys exist
+                for key, value in DEFAULT_PREFERENCES.items():
+                    if key not in prefs:
+                        prefs[key] = value
+                return prefs
+    except (IOError, json.JSONDecodeError) as e:
+        logger.error(f"Error loading user preferences: {e}")
+    
+    # Return default preferences if file not found or invalid
+    return DEFAULT_PREFERENCES.copy()
+
+def save_user_preferences(prefs):
+    """
+    Save user preferences to the config file.
+    
+    Args:
+        prefs (dict): User preferences to save
+    """
+    try:
+        with open(USER_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(prefs, f, indent=4)
+        logger.info(f"Saved user preferences to {USER_CONFIG_FILE}")
+    except IOError as e:
+        logger.error(f"Error saving user preferences: {e}")
+
+def add_recent_file(prefs, filepath):
+    """
+    Add a file to the recent files list.
+    
+    Args:
+        prefs (dict): User preferences
+        filepath (str): Path to the file to add
+    
+    Returns:
+        dict: Updated user preferences
+    """
+    if 'recent_files' not in prefs:
+        prefs['recent_files'] = []
+    
+    # Remove the file if it already exists in the list
+    if filepath in prefs['recent_files']:
+        prefs['recent_files'].remove(filepath)
+    
+    # Add the file to the beginning of the list
+    prefs['recent_files'].insert(0, filepath)
+    
+    # Limit the number of recent files
+    prefs['recent_files'] = prefs['recent_files'][:MAX_RECENT_FILES]
+    
+    return prefs

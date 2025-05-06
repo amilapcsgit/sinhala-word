@@ -23,23 +23,40 @@ logger = logging.getLogger("SuggestionPopup")
 class SuggestionButton(QPushButton):
     """Custom button for suggestions with improved styling and keyboard navigation."""
     
-    def __init__(self, text, index, parent=None):
+    def __init__(self, text, index, parent=None, accent_color="#0078D4"):
         super().__init__(text, parent)
         self.index = index
         self.setFocusPolicy(Qt.NoFocus)  # Don't steal focus from editor
         self.setAutoDefault(False)
         
         # Set minimum size for better usability
-        self.setMinimumHeight(30)
+        self.setMinimumHeight(40)
         
         # Set object name for styling
         self.setObjectName("suggestion_button")
         
-        # Add shortcut number to text if index < 9
-        if index < 9:
-            self.setText(f"{index+1}. {text}")
+        # Enable rich text interpretation
+        self.setStyleSheet("text-align: left; padding: 8px 12px;")
+        
+        # Store the original text and accent color
+        self.suggestion_text = text
+        self.accent_color = accent_color
+        
+        # Add shortcut number to text if index < 9 with special formatting
+        self.update_text()
+        
+    def update_text(self):
+        """Update the button text with formatted number prefix."""
+        if self.index < 9:
+            # Don't use HTML, just prepend the number
+            self.setText(f"{self.index+1}. {self.suggestion_text}")
         else:
-            self.setText(text)
+            self.setText(self.suggestion_text)
+            
+    def set_accent_color(self, color):
+        """Update the accent color for the number."""
+        self.accent_color = color
+        self.update_text()
 
 class SuggestionPopup(QWidget):
     """
@@ -65,9 +82,13 @@ class SuggestionPopup(QWidget):
         self.suggestions = []
         self.buttons = []
         self.current_index = -1
-        self.max_width = 400
-        self.max_height = 300
+        self.max_width = 500
+        self.max_height = 400
         self.is_dark_mode = False
+        self.accent_color = "#0078D4"
+        
+        # Set up the custom font
+        self.setup_font()
         
         # Set up the UI
         self.setup_ui()
@@ -78,6 +99,57 @@ class SuggestionPopup(QWidget):
         # Don't show in taskbar and don't activate
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
+        
+    def setup_font(self):
+        """Set up the custom UN-Ganganee font."""
+        import os
+        
+        # Path to the font file - use relative path with correct filename and extension
+        font_path = "fonts/un-ganganee.otf"
+        
+        # Check if the font file exists
+        if os.path.exists(font_path):
+            # Create a font database and add the font
+            from PySide6.QtGui import QFontDatabase
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            
+            if font_id != -1:
+                # Get the font family name
+                font_families = QFontDatabase.applicationFontFamilies(font_id)
+                if font_families:
+                    self.font_family = font_families[0]
+                    logger.info(f"Successfully loaded font family: {self.font_family}")
+                else:
+                    self.font_family = "Arial Unicode MS"
+                    logger.warning("Could not get font family name, using Arial Unicode MS")
+            else:
+                self.font_family = "Arial Unicode MS"
+                logger.warning(f"Failed to add font from {font_path}, using Arial Unicode MS")
+                
+            # Create the font with appropriate size
+            self.popup_font = QFont(self.font_family)
+            
+            # Get system DPI settings to adjust font size
+            # Default to size 20 if we can't determine system settings
+            try:
+                from PySide6.QtGui import QGuiApplication
+                screen = QGuiApplication.primaryScreen()
+                dpi = screen.logicalDotsPerInch()
+                # Scale font size based on DPI (20 at 96 DPI, up to 40 at 192 DPI)
+                font_size = max(20, min(40, int(20 * dpi / 96)))
+            except Exception as e:
+                logger.warning(f"Error getting DPI: {e}")
+                font_size = 20
+                
+            self.popup_font.setPointSize(font_size)
+            self.popup_font.setBold(False)  # Ensure it's not bold by default
+            self.setFont(self.popup_font)
+            
+            logger.info(f"Using font: {self.font_family} at size {font_size}")
+        else:
+            logger.warning(f"Font file not found: {font_path}")
+            self.font_family = "Arial Unicode MS"
+            self.popup_font = QFont(self.font_family, 20)
         
     def setup_ui(self):
         """Set up the UI components."""
@@ -132,21 +204,63 @@ class SuggestionPopup(QWidget):
         
         # Create new buttons for each suggestion
         for i, suggestion in enumerate(self.suggestions):
-            button = SuggestionButton(suggestion, i, self)
+            # Create button with accent color
+            button = SuggestionButton(suggestion, i, self, self.accent_color)
             button.clicked.connect(lambda checked=False, s=suggestion: self.on_suggestion_clicked(s))
             
-            # Highlight the first button
-            if i == 0:
-                button.setStyleSheet("font-weight: bold; border-width: 2px;")
-                
+            # Set the custom font
+            button.setFont(self.popup_font)
+            
+            # Set fixed height to ensure consistent sizing
+            button.setMinimumHeight(40)
+            
+            # Add to layout
             self.scroll_layout.addWidget(button)
             self.buttons.append(button)
             
         # Reset current index
         self.current_index = 0 if self.buttons else -1
         
+        # Apply styling after adding to layout
+        self.apply_button_styles()
+        
         # Update size
         self.adjust_size()
+        
+    def apply_button_styles(self):
+        """Apply styles to all buttons."""
+        # Get theme colors (use defaults if not set)
+        bg_color = getattr(self, 'button_bg', "#F0F0F0")
+        text_color = getattr(self, 'text_color', "#000000")
+        border_color = getattr(self, 'border_color', "#CCCCCC")
+        
+        # Base style for all buttons
+        base_style = f"""
+            text-align: left;
+            padding: 8px 16px;
+            margin: 2px;
+            border-radius: 6px;
+            border-width: 1px;
+            border-style: solid;
+            border-color: {border_color};
+            background-color: {bg_color};
+            color: {text_color};
+            font-family: "{self.font_family}";
+        """
+        
+        # Apply styles to all buttons
+        for i, button in enumerate(self.buttons):
+            if i == self.current_index:
+                # Highlighted button
+                button.setStyleSheet(f"""
+                    {base_style}
+                    font-weight: bold;
+                    border-width: 2px;
+                    border-style: solid;
+                    border-color: {self.accent_color};
+                """)
+            else:
+                button.setStyleSheet(base_style)
         
     def adjust_size(self):
         """Adjust the size of the popup based on content."""
@@ -155,7 +269,7 @@ class SuggestionPopup(QWidget):
             return
             
         # Calculate the width based on the widest button
-        font_metrics = QFontMetrics(self.font())
+        font_metrics = QFontMetrics(self.popup_font)
         width = 0
         for button in self.buttons:
             text_width = font_metrics.horizontalAdvance(button.text()) + 40  # Add padding
@@ -165,7 +279,7 @@ class SuggestionPopup(QWidget):
         width = min(width, self.max_width)
         
         # Calculate height based on number of buttons
-        button_height = self.buttons[0].sizeHint().height() if self.buttons else 30
+        button_height = self.buttons[0].sizeHint().height() if self.buttons else 40
         height = min(len(self.buttons) * (button_height + 2) + 10, self.max_height)
         
         # Set the size
@@ -245,15 +359,11 @@ class SuggestionPopup(QWidget):
     def navigate_to(self, index):
         """Navigate to the button at the given index."""
         if 0 <= index < len(self.buttons):
-            # Reset styling on all buttons
-            for button in self.buttons:
-                button.setStyleSheet("")
-            
             # Update current index
             self.current_index = index
             
-            # Highlight the selected button
-            self.buttons[index].setStyleSheet("font-weight: bold; border-width: 2px;")
+            # Apply styles to all buttons
+            self.apply_button_styles()
             
             # Log navigation
             logger.info(f"Navigated to suggestion {index+1}: {self.suggestions[index]}")
@@ -331,26 +441,26 @@ class SuggestionPopup(QWidget):
         
         # Apply theme colors
         if is_dark_mode:
-            bg_color = theme_colors.get("OverlayColor", "#2D2D2D")
-            text_color = theme_colors.get("PrimaryForegroundColor", "#FFFFFF")
-            border_color = theme_colors.get("PrimarySolidBorderColor", "#3F3F3F")
-            button_bg = theme_colors.get("OverlayColor", "#3F3F3F")
-            button_hover = theme_colors.get("MouseOverBackgroundColor", "#505050")
-            accent_color = theme_colors.get("AccentColor", "#60CDFF")
+            self.bg_color = theme_colors.get("OverlayColor", "#2D2D2D")
+            self.text_color = theme_colors.get("PrimaryForegroundColor", "#FFFFFF")
+            self.border_color = theme_colors.get("PrimarySolidBorderColor", "#3F3F3F")
+            self.button_bg = theme_colors.get("OverlayColor", "#3F3F3F")
+            self.button_hover = theme_colors.get("MouseOverBackgroundColor", "#505050")
+            self.accent_color = theme_colors.get("AccentColor", "#60CDFF")
         else:
-            bg_color = theme_colors.get("PrimarySolidBackgroundColor", "#F9F9F9")
-            text_color = theme_colors.get("PrimaryForegroundColor", "#000000")
-            border_color = theme_colors.get("PrimarySolidBorderColor", "#CCCCCC")
-            button_bg = theme_colors.get("PrimarySolidBackgroundColor", "#F0F0F0")
-            button_hover = theme_colors.get("MouseOverBackgroundColor", "#E5E5E5")
-            accent_color = theme_colors.get("AccentColor", "#0078D4")
+            self.bg_color = theme_colors.get("PrimarySolidBackgroundColor", "#F9F9F9")
+            self.text_color = theme_colors.get("PrimaryForegroundColor", "#000000")
+            self.border_color = theme_colors.get("PrimarySolidBorderColor", "#CCCCCC")
+            self.button_bg = theme_colors.get("PrimarySolidBackgroundColor", "#F0F0F0")
+            self.button_hover = theme_colors.get("MouseOverBackgroundColor", "#E5E5E5")
+            self.accent_color = theme_colors.get("AccentColor", "#0078D4")
             
-        # Set stylesheet for the popup
+        # Set stylesheet for the popup container
         self.setStyleSheet(f"""
-            SuggestionPopup {{
-                background-color: {bg_color};
-                color: {text_color};
-                border: 1px solid {border_color};
+            QWidget {{
+                background-color: {self.bg_color};
+                color: {self.text_color};
+                border: 1px solid {self.border_color};
                 border-radius: 6px;
             }}
             
@@ -359,23 +469,16 @@ class SuggestionPopup(QWidget):
                 border: none;
             }}
             
-            QPushButton#suggestion_button {{
-                background-color: {button_bg};
-                color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 4px;
-                padding: 6px 10px;
-                text-align: left;
-            }}
-            
-            QPushButton#suggestion_button:hover {{
-                background-color: {button_hover};
-                border: 1px solid {accent_color};
-            }}
-            
-            QPushButton#suggestion_button:focus {{
-                background-color: {button_hover};
-                border: 2px solid {accent_color};
-                outline: none;
+            QWidget#scroll_container {{
+                background-color: transparent;
+                border: none;
             }}
         """)
+        
+        # Update accent color for all buttons
+        for button in self.buttons:
+            if isinstance(button, SuggestionButton):
+                button.set_accent_color(self.accent_color)
+                
+        # Reapply styling to all buttons
+        self.apply_button_styles()

@@ -1402,13 +1402,15 @@ class SinhalaWordApp(QMainWindow):
                     # Accept the first suggestion on Enter
                     try:
                         # Make a local copy of the suggestion to avoid race conditions
-                        suggestion = self.current_suggestions[0]
+                        sinhala_word = self.current_suggestions[0]
+                        
+                        # Log the selected suggestion
+                        logger.info(f"Selected first suggestion: '{sinhala_word}'")
+                        
                         # Clear suggestions first to avoid race conditions
                         self.clear_suggestion_area()
-                        # Clear buffer before accepting suggestion
-                        self.buffer.clear()
-                        # Now replace the text
-                        self.replace_with_suggestion(suggestion)
+                        # Accept the suggestion (this will also clear the buffer)
+                        self.accept_suggestion(sinhala_word)
                         return True # Consume Enter
                     except Exception as e:
                         logger.error(f"Error handling Enter key: {e}")
@@ -1442,13 +1444,15 @@ class SinhalaWordApp(QMainWindow):
                     if index < len(self.current_suggestions):
                         try:
                             # Make a local copy of the suggestion to avoid race conditions
-                            suggestion = self.current_suggestions[index]
+                            sinhala_word = self.current_suggestions[index]
+                            
+                            # Log the selected suggestion
+                            logger.info(f"Selected suggestion {index+1}: '{sinhala_word}'")
+                            
                             # Clear suggestions first to avoid race conditions
                             self.clear_suggestion_area()
-                            # Clear buffer before accepting suggestion
-                            self.buffer.clear()
-                            # Now replace the text
-                            self.replace_with_suggestion(suggestion)
+                            # Accept the suggestion (this will also clear the buffer)
+                            self.accept_suggestion(sinhala_word)
                             return True # Consume number key
                         except Exception as e:
                             logger.error(f"Error handling number key: {e}")
@@ -1607,13 +1611,17 @@ class SinhalaWordApp(QMainWindow):
         # This matches the behavior in SinhalaWordProcessor_enhanced.py
         if self.buffer and self.word_start_pos is not None:
             try:
+                # Log the operation
+                logger.info(f"Accepting suggestion: '{sinhala_word}' to replace buffer: '{''.join(self.buffer)}'")
+                
                 cur = self.editor.textCursor()
                 cur.beginEditBlock()
 
                 # Move cursor to the start of the buffered word
                 cur.setPosition(self.word_start_pos)
                 # Select the buffered text
-                cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len("".join(self.buffer)))
+                buffer_text = "".join(self.buffer)
+                cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(buffer_text))
                 # Remove the buffered text
                 cur.removeSelectedText()
                 # Insert the accepted Sinhala word
@@ -1623,6 +1631,12 @@ class SinhalaWordApp(QMainWindow):
                 # Clear the buffer and reset word_start_pos
                 self.buffer.clear()
                 self.word_start_pos = None
+                
+                # Log success
+                logger.info(f"Successfully accepted suggestion: '{sinhala_word}'")
+            except Exception as e:
+                logger.error(f"Error in accept_suggestion: {e}")
+                self.reset_input_state()
                 
                 # Clear area after accepting
                 self.clear_suggestion_area()

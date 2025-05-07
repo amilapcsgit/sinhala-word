@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QFrame, QScrollArea, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QSize, QEvent
+from PySide6.QtCore import Qt, Signal, QPoint, QSize, QEvent, QTimer
 from PySide6.QtGui import QFont, QFontMetrics
 
 # Set up logging
@@ -30,13 +30,13 @@ class SuggestionButton(QPushButton):
         self.setAutoDefault(False)
         
         # Set minimum size for better usability
-        self.setMinimumHeight(40)
+        self.setMinimumHeight(48)  # Increased height for better Sinhala character display
         
         # Set object name for styling
         self.setObjectName("suggestion_button")
         
-        # Enable rich text interpretation
-        self.setStyleSheet("text-align: left; padding: 8px 12px;")
+        # Enable rich text interpretation - keep padding moderate to maximize text space
+        self.setStyleSheet("text-align: left; padding: 6px 12px;")
         
         # Store the original text and accent color
         self.suggestion_text = text
@@ -191,7 +191,13 @@ class SuggestionPopup(QWidget):
         
     def set_suggestions(self, suggestions):
         """Set the suggestions to display."""
+        # Store the new suggestions
         self.suggestions = suggestions
+        
+        # Log the new suggestions for debugging
+        logger.info(f"Setting {len(suggestions)} new suggestions")
+        
+        # Update buttons and recalculate size
         self.update_buttons()
         
     def update_buttons(self):
@@ -212,7 +218,7 @@ class SuggestionPopup(QWidget):
             button.setFont(self.popup_font)
             
             # Set fixed height to ensure consistent sizing
-            button.setMinimumHeight(40)
+            button.setMinimumHeight(48)  # Increased height for better Sinhala character display
             
             # Add to layout
             self.scroll_layout.addWidget(button)
@@ -237,7 +243,7 @@ class SuggestionPopup(QWidget):
         # Base style for all buttons
         base_style = f"""
             text-align: left;
-            padding: 8px 16px;
+            padding: 6px 16px;  /* Reduced padding to maximize text space */
             margin: 2px;
             border-radius: 6px;
             border-width: 1px;
@@ -268,22 +274,43 @@ class SuggestionPopup(QWidget):
             self.hide()
             return
             
-        # Calculate the width based on the widest button
+        # Calculate the width based on the widest button in the current set of suggestions
         font_metrics = QFontMetrics(self.popup_font)
         width = 0
+        
+        # Log all button texts for debugging
+        button_texts = []
         for button in self.buttons:
-            text_width = font_metrics.horizontalAdvance(button.text()) + 40  # Add padding
+            button_text = button.text()
+            button_texts.append(button_text)
+            # Get the actual text width for each suggestion with extra padding for safety
+            text_width = font_metrics.horizontalAdvance(button_text) + 60  # Increased padding
             width = max(width, text_width)
+        
+        # Log the button texts and calculated width
+        logger.info(f"Button texts: {button_texts}")
+        logger.info(f"Calculated width before limit: {width}")
+        
+        # Ensure minimum width for better usability
+        width = max(width, 200)  # Minimum width of 200 pixels
             
         # Limit width to max_width
         width = min(width, self.max_width)
         
         # Calculate height based on number of buttons
-        button_height = self.buttons[0].sizeHint().height() if self.buttons else 40
-        height = min(len(self.buttons) * (button_height + 2) + 10, self.max_height)
+        button_height = self.buttons[0].sizeHint().height() if self.buttons else 48  # Increased height for Sinhala characters
+        # Use minimal spacing between buttons to maximize visible area
+        height = min(len(self.buttons) * (button_height + 2) + 8, self.max_height)
         
-        # Set the size
+        # Log the final dimensions
+        logger.info(f"Adjusting popup size to width: {width}, height: {height}")
+        
+        # Set the size with a slight delay to ensure it takes effect
         self.resize(width, height)
+        
+        # Force layout update
+        self.updateGeometry()
+        self.scroll_container.updateGeometry()
         
     def position_near_cursor(self, cursor_rect, editor_rect):
         """Position the popup near the cursor."""
@@ -328,8 +355,17 @@ class SuggestionPopup(QWidget):
         if not suggestions:
             self.hide()
             return
+        
+        # Log the suggestions we're about to show
+        logger.info(f"Showing popup with suggestions: {suggestions}")
             
+        # Set suggestions and update buttons
         self.set_suggestions(suggestions)
+        
+        # Force size recalculation
+        self.adjust_size()
+        
+        # Position the popup near the cursor
         self.position_near_cursor(cursor_rect, editor_rect)
         
         # Set the first button as the current one, but don't focus it
@@ -339,12 +375,36 @@ class SuggestionPopup(QWidget):
         # Show the popup without stealing focus or activating
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        
+        # Install event filter on the editor to catch space key events
+        # This allows us to hide the popup when space is pressed
+        editor = self.parent().editor
+        editor.installEventFilter(self)
+        
+        # Show the popup
         self.show()
         
+        # Force layout update after showing
+        QTimer.singleShot(10, self.updateGeometry)
+        
         # Make sure the editor keeps focus
-        self.parent().editor.activateWindow()
-        self.parent().editor.setFocus()
+        editor.activateWindow()
+        editor.setFocus()
             
+    def hide(self):
+        """Override hide to remove event filter from editor."""
+        # Remove event filter from editor when hiding
+        try:
+            editor = self.parent().editor
+            if editor:
+                editor.removeEventFilter(self)
+                logger.info("Removed event filter from editor")
+        except Exception as e:
+            logger.error(f"Error removing event filter: {e}")
+            
+        # Call parent class hide method
+        super().hide()
+        
     def on_suggestion_clicked(self, suggestion):
         """Handle a suggestion being clicked."""
         self.suggestionSelected.emit(suggestion)
@@ -354,7 +414,7 @@ class SuggestionPopup(QWidget):
         """Select the suggestion at the given index."""
         if 0 <= index < len(self.suggestions):
             self.suggestionSelected.emit(self.suggestions[index])
-            self.hide()
+            self.hide()  # This will call our custom hide method
             
     def navigate_to(self, index):
         """Navigate to the button at the given index."""
@@ -422,6 +482,12 @@ class SuggestionPopup(QWidget):
             elif key == Qt.Key_Escape:
                 self.hide()
                 return True
+                
+            # Handle Space to hide the popup without selecting
+            elif key == Qt.Key_Space:
+                logger.info("Space key pressed - hiding suggestion popup")
+                self.hide()
+                return False  # Don't consume the event, let it pass to editor
                 
             # Handle number keys 1-9 to select suggestions
             elif Qt.Key_1 <= key <= Qt.Key_9:

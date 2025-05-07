@@ -1463,18 +1463,17 @@ class SinhalaWordApp(QMainWindow):
                         
                 elif key == Qt.Key_Space:
                     try:
-                        # Accept the first suggestion on Space and insert a space
-                        # This matches the behavior in SinhalaWordProcessor_enhanced.py
+                        # When space is pressed, just hide the suggestions without selecting any
+                        # and insert a space character
                         if self.current_suggestions:
-                            # Get the current index from the popup
-                            current_index = self.suggestion_popup.current_index
-                            if current_index >= 0 and current_index < len(self.current_suggestions):
-                                sinhala_word = self.current_suggestions[current_index]
-                            else:
-                                # Default to first suggestion if no current index
-                                sinhala_word = self.current_suggestions[0]
-                                
-                            self.accept_suggestion(sinhala_word)
+                            # Hide the suggestion popup
+                            self.suggestion_popup.hide()
+                            # Clear suggestions
+                            self.current_suggestions = []
+                            # Commit the buffer as is
+                            if self.buffer:
+                                self.commit_buffer()
+                            # Insert a space
                             self.editor.insertPlainText(" ")
                             return True # Consume Space
                         else:

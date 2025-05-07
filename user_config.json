@@ -1,10 +1,10 @@
 {
-    "theme": "dark",
-    "font": "UN-Ganganee",
-    "font_size": 22,
+    "theme": "light",
+    "font": "Abhaya Libre SemiBold",
+    "font_size": 48,
     "window_size": [
-        1352,
-        874
+        1920,
+        1137
     ],
     "show_keyboard": true,
     "show_suggestions": true,

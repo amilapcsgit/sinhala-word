@@ -1,10 +1,10 @@
 {
     "theme": "dark",
     "font": "UN-Ganganee",
-    "font_size": 28,
+    "font_size": 72,
     "window_size": [
-        1920,
-        1137
+        1728,
+        1044
     ],
     "show_keyboard": true,
     "show_suggestions": true,
@@ -13,5 +13,6 @@
         "C:/sinhalaword/sinhala-word/sinhala word working output.txt",
         "C:/sinhala word/sinhala word working output.txt"
     ],
-    "keyboard_font_size": 42
+    "keyboard_font_size": 30,
+    "keyboard_height": 425
 }

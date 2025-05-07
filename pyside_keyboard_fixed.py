@@ -1,19 +1,30 @@
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QWidget, 
-                          QSizePolicy, QDialog, QLabel, QGridLayout)
-from PySide6.QtCore import Qt, Signal, QObject, QEvent
-from PySide6.QtGui import QColor, QFont, QCursor
+                          QSizePolicy, QDialog, QLabel, QGridLayout, QSplitter)
+from PySide6.QtCore import Qt, Signal, QObject, QEvent, QSize
+from PySide6.QtGui import QColor, QFont, QCursor, QResizeEvent
 
 class SinhalaKeyboard(QFrame):
-    """PySide6 implementation of the Sinhala Keyboard"""
+    """PySide6 implementation of the Sinhala Keyboard with resizing capability"""
 
     # Signal emitted when a key is pressed
     keyPressed = Signal(str)
+    
+    # Signal emitted when keyboard is resized
+    keyboardResized = Signal(int)
 
     def __init__(self, parent=None, dark_mode=False, font_size=26):
         super().__init__(parent)
         self.dark_mode = dark_mode
         self.font_size = font_size
         self.keyboard_font_family = "Iskoola Pota"  # Default fallback
+        
+        # Increase default height by 20%
+        self.default_height = 264  # 220 * 1.2 = 264
+        
+        # Track initial size for proportional resizing
+        self.initial_size = None
+        self.resize_in_progress = False
+        self.resize_direction = None
         
         # Load the Sinhala font for the keyboard
         self.load_keyboard_font()
@@ -30,71 +41,37 @@ class SinhalaKeyboard(QFrame):
         # Create the keyboard UI
         self.create_keyboard()
         
+        # Enable mouse tracking for resize operations
+        self.setMouseTracking(True)
+        
+        # Set minimum height
+        self.setMinimumHeight(180)
+        
+        # Set size policy to allow vertical resizing
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        
     def load_keyboard_font(self):
         """Load Sinhala font for the keyboard buttons"""
         import os
-        from PySide6.QtGui import QFontDatabase
+        from PySide6.QtGui import QFontDatabase, QFont
         
-        # Only check for specific Sinhala fonts we need
-        system_sinhala_fonts = ["Iskoola Pota", "Nirmala UI", "Dinamika", "Malithi Web"]
+        # Prioritized list of Sinhala fonts that are known to work well
+        # Only try fonts that are likely to be installed on Windows systems
+        system_sinhala_fonts = ["Iskoola Pota", "Nirmala UI"]
         
         # First try to use system Sinhala fonts that are known to work well
-        for font in system_sinhala_fonts:
-                self.keyboard_font_family = font
-                print(f"Using system Sinhala font for keyboard: {font}")
+        for font_name in system_sinhala_fonts:
+            # Check if font exists in the system
+            font = QFont(font_name)
+            if font.exactMatch() or font.family() == font_name:
+                self.keyboard_font_family = font_name
+                print(f"Using system Sinhala font for keyboard: {font_name}")
                 return
         
-        # If no system Sinhala fonts found, try to load embedded fonts
-        # Path to the fonts directory
-        fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
-        
-        # Check if fonts directory exists
-        if os.path.exists(fonts_dir):
-            print(f"Fonts directory found: {fonts_dir}")
-            # List all font files
-            font_files = [f for f in os.listdir(fonts_dir) if f.lower().endswith(('.ttf', '.otf'))]
-            print(f"Font files found: {', '.join(font_files)}")
-            
-            # Try UN-Ganganee first
-            un_ganganee_path = os.path.join(fonts_dir, "un-ganganee.ttf")
-            if os.path.exists(un_ganganee_path):
-                print(f"Loading UN-Ganganee from: {un_ganganee_path}")
-                font_id = QFontDatabase.addApplicationFont(un_ganganee_path)
-                if font_id != -1:
-                    families = QFontDatabase.applicationFontFamilies(font_id)
-                    if families:
-                        self.keyboard_font_family = families[0]
-                        print(f"Successfully loaded UN-Ganganee font for keyboard: {self.keyboard_font_family}")
-                        return
-                    else:
-                        print("Failed to get font families for UN-Ganganee")
-                else:
-                    print("Failed to add UN-Ganganee font")
-            else:
-                print(f"UN-Ganganee font not found at: {un_ganganee_path}")
-            
-            # If UN-Ganganee not found, try any Sinhala font
-            for font_file in font_files:
-                font_path = os.path.join(fonts_dir, font_file)
-                print(f"Trying to load font: {font_path}")
-                font_id = QFontDatabase.addApplicationFont(font_path)
-                if font_id != -1:
-                    families = QFontDatabase.applicationFontFamilies(font_id)
-                    if families:
-                        self.keyboard_font_family = families[0]
-                        print(f"Successfully loaded alternative Sinhala font for keyboard: {self.keyboard_font_family}")
-                        return
-                    else:
-                        print(f"No families found for font: {font_file}")
-                else:
-                    print(f"Failed to add font: {font_file}")
-        else:
-            print(f"Fonts directory not found: {fonts_dir}")
-        
-        # Fallback to a generic sans-serif font if no Sinhala fonts found
-        print("Falling back to generic sans-serif font for keyboard")
+        # If no system Sinhala fonts found, use a simple fallback
+        # that's guaranteed to work without causing OpenType errors
+        print("No Sinhala system fonts found, using fallback font")
         self.keyboard_font_family = "Arial"
-        # Don't call self.load_keyboard_font() again to avoid infinite recursion
 
     def setup_keyboard_properties(self):
         """Define keyboard layouts and properties"""
@@ -206,12 +183,19 @@ class SinhalaKeyboard(QFrame):
         
     def update_buttons(self):
         """Update all existing buttons with the current style and size"""
-        button_size = max(46, self.font_size + 20)  # Scale button size with font size
+        # Calculate button size based on keyboard height
+        if self.height() > 0:
+            # Calculate button size proportionally to keyboard height
+            # Base size is font_size + 20, but adjust based on keyboard height
+            height_factor = self.height() / self.default_height
+            button_size = max(46, int((self.font_size + 20) * height_factor))
+        else:
+            button_size = max(46, self.font_size + 20)
         
         # Update all existing buttons
         for child in self.findChildren(QPushButton):
             if child.text() not in ["Space", "Backspace"]:
-                child.setStyleSheet(self.button_style)
+                child.setStyleSheet(self.get_button_style(button_size))
                 child.setFixedSize(button_size, button_size)
             elif child.text() == "Space":
                 child.setStyleSheet(self.get_space_button_style())
@@ -220,74 +204,86 @@ class SinhalaKeyboard(QFrame):
                 child.setStyleSheet(self.get_backspace_button_style())
                 child.setFixedHeight(button_size)
 
+    def get_button_style(self, button_size):
+        """Get the button style with the specified size based on current theme"""
+        # Calculate font size proportionally to button size
+        adjusted_font_size = max(self.font_size, int(self.font_size * button_size / (self.font_size + 20)))
+        
+        if self.dark_mode:
+            return f"""
+                QPushButton {{
+                    font-family: "{self.keyboard_font_family}";
+                    font-size: {adjusted_font_size}px;
+                    font-weight: bold;
+                    border: 1px solid #555555;
+                    border-radius: 6px;
+                    background-color: #3c3c3c;
+                    color: #ffffff;
+                    min-width: {button_size}px;
+                    min-height: {button_size}px;
+                    max-width: {button_size}px;
+                    max-height: {button_size}px;
+                    padding: 2px;
+                }}
+                QPushButton:hover {{
+                    background-color: #4d4d4d;
+                    border: 1px solid #6699cc;
+                }}
+                QPushButton:pressed {{
+                    background-color: #555555;
+                    border: 2px solid #6699cc;
+                }}
+            """
+        else:
+            return f"""
+                QPushButton {{
+                    font-family: "{self.keyboard_font_family}";
+                    font-size: {adjusted_font_size}px;
+                    font-weight: bold;
+                    border: 1px solid #aaaaaa;
+                    border-radius: 6px;
+                    background-color: #ffffff;
+                    color: #000000;
+                    min-width: {button_size}px;
+                    min-height: {button_size}px;
+                    max-width: {button_size}px;
+                    max-height: {button_size}px;
+                    padding: 2px;
+                }}
+                QPushButton:hover {{
+                    background-color: #e6f0ff;
+                    border: 1px solid #4d94ff;
+                }}
+                QPushButton:pressed {{
+                    background-color: #99c2ff;
+                    border: 2px solid #0066ff;
+                }}
+            """
+
     def get_light_button_style(self):
         """Get the button style for light mode"""
         # Use the loaded font family and specified font size
         button_size = max(46, self.font_size + 20)  # Scale button size with font size
-        return f"""
-            QPushButton {{
-                font-family: "{self.keyboard_font_family}";
-                font-size: {self.font_size}px;
-                font-weight: bold;
-                border: 1px solid #aaaaaa;
-                border-radius: 6px;
-                background-color: #ffffff;
-                color: #000000;
-                min-width: {button_size}px;
-                min-height: {button_size}px;
-                max-width: {button_size}px;
-                max-height: {button_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #e6f0ff;
-                border: 1px solid #4d94ff;
-            }}
-            QPushButton:pressed {{
-                background-color: #99c2ff;
-                border: 2px solid #0066ff;
-            }}
-        """
+        return self.get_button_style(button_size)
 
     def get_dark_button_style(self):
         """Get the button style for dark mode"""
         # Use the loaded font family and specified font size
         button_size = max(46, self.font_size + 20)  # Scale button size with font size
-        return f"""
-            QPushButton {{
-                font-family: "{self.keyboard_font_family}";
-                font-size: {self.font_size}px;
-                font-weight: bold;
-                border: 1px solid #555555;
-                border-radius: 6px;
-                background-color: #3c3c3c;
-                color: #ffffff;
-                min-width: {button_size}px;
-                min-height: {button_size}px;
-                max-width: {button_size}px;
-                max-height: {button_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #4d4d4d;
-                border: 1px solid #6699cc;
-            }}
-            QPushButton:pressed {{
-                background-color: #555555;
-                border: 2px solid #6699cc;
-            }}
-        """
+        return self.get_button_style(button_size)
 
     def get_space_button_style(self):
         """Get the style for the Space button based on current theme"""
         if self.dark_mode:
             return """
                 QPushButton {
-                    font-family: "Segoe UI";
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     border: 1px solid #555555;
                     border-radius: 6px;
                     background-color: #444444;
                     color: #ffffff;
+                    padding: 2px;
                 }
                 QPushButton:hover {
                     background-color: #4d4d4d;
@@ -301,13 +297,13 @@ class SinhalaKeyboard(QFrame):
         else:
             return """
                 QPushButton {
-                    font-family: "Segoe UI";
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     border: 1px solid #aaaaaa;
                     border-radius: 6px;
                     background-color: #f0f0f0;
                     color: #000000;
+                    padding: 2px;
                 }
                 QPushButton:hover {
                     background-color: #e6f0ff;
@@ -324,13 +320,13 @@ class SinhalaKeyboard(QFrame):
         if self.dark_mode:
             return """
                 QPushButton {
-                    font-family: "Segoe UI";
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     border: 1px solid #555555;
                     border-radius: 6px;
                     background-color: #444444;
                     color: #ffffff;
+                    padding: 2px;
                 }
                 QPushButton:hover {
                     background-color: #663333;
@@ -344,13 +340,13 @@ class SinhalaKeyboard(QFrame):
         else:
             return """
                 QPushButton {
-                    font-family: "Segoe UI";
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     border: 1px solid #aaaaaa;
                     border-radius: 6px;
                     background-color: #f0f0f0;
                     color: #000000;
+                    padding: 2px;
                 }
                 QPushButton:hover {
                     background-color: #ffe6e6;
@@ -368,31 +364,24 @@ class SinhalaKeyboard(QFrame):
         main_layout.setContentsMargins(3, 3, 3, 3)
         main_layout.setSpacing(2)
 
-        # Use the button style based on current theme
-        button_style = self.button_style
-
         # Create a single grid layout for the entire keyboard
         grid_layout = QGridLayout()
-        grid_layout.setSpacing(2)
+        grid_layout.setSpacing(4)  # Increased spacing to prevent overlap
 
-        # Set button size based on font size
-        button_size = max(46, self.font_size + 20)  # Scale button size with font size
+        # Set button size based on font size with 20% increase
+        button_size = max(55, int((self.font_size + 20) * 1.2))  # Scale button size with font size and add 20%
         
         print(f"Creating keyboard with button size: {button_size}px")
 
         # Row 0: Vowels
         vowels = self.keys['vowels']
         for col, key in enumerate(vowels):
-            # Create button with explicit font
+            # Create button
             btn = QPushButton(key)
             
-            # Set explicit font for the button
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn.setFont(btn_font)
-            
-            # Apply stylesheet
-            btn.setStyleSheet(button_style)
-            btn.setFixedSize(button_size, button_size)  # Larger buttons for better visibility
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(button_size))
+            btn.setFixedSize(button_size, button_size)
             
             # Print debug info for first button
             if col == 0:
@@ -410,16 +399,12 @@ class SinhalaKeyboard(QFrame):
         # Row 1: Vowel modifiers and first consonants
         row1_keys = ['ු', 'ූ', 'ෙ', 'ේ', 'ෛ', 'ො', 'ෝ', 'ෞ', 'ක', 'ඛ', 'ග', 'ඝ', 'ඟ', 'ච', 'ඡ']
         for col, key in enumerate(row1_keys):
-            # Create button with explicit font
+            # Create button
             btn = QPushButton(key)
             
-            # Set explicit font for the button
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn.setFont(btn_font)
-            
-            # Apply stylesheet
-            btn.setStyleSheet(button_style)
-            btn.setFixedSize(button_size, button_size)  # Larger buttons for better visibility
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(button_size))
+            btn.setFixedSize(button_size, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -428,16 +413,12 @@ class SinhalaKeyboard(QFrame):
         # Row 2: More consonants
         row2_keys = ['ජ', 'ඣ', 'ඤ', 'ඥ', 'ට', 'ඨ', 'ඩ', 'ඪ', 'ණ', 'ඬ', 'ත', 'ථ', 'ද', 'ධ', 'න']
         for col, key in enumerate(row2_keys):
-            # Create button with explicit font
+            # Create button
             btn = QPushButton(key)
             
-            # Set explicit font for the button
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn.setFont(btn_font)
-            
-            # Apply stylesheet
-            btn.setStyleSheet(button_style)
-            btn.setFixedSize(button_size, button_size)  # Larger buttons for better visibility
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(button_size))
+            btn.setFixedSize(button_size, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -446,16 +427,12 @@ class SinhalaKeyboard(QFrame):
         # Row 3: More consonants
         row3_keys = ['ඳ', 'ප', 'ඵ', 'බ', 'භ', 'ම', 'ඹ', 'ය', 'ර', 'ල', 'ව', 'ශ', 'ෂ', 'ස', 'හ']
         for col, key in enumerate(row3_keys):
-            # Create button with explicit font
+            # Create button
             btn = QPushButton(key)
             
-            # Set explicit font for the button
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn.setFont(btn_font)
-            
-            # Apply stylesheet
-            btn.setStyleSheet(button_style)
-            btn.setFixedSize(button_size, button_size)  # Larger buttons for better visibility
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(button_size))
+            btn.setFixedSize(button_size, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -464,16 +441,12 @@ class SinhalaKeyboard(QFrame):
         # Row 4: Remaining consonants and special characters
         row4_keys = ['ළ', 'ෆ', 'ං', 'ඃ', '්', 'ා', 'ැ', 'ෑ', 'ි', 'ී']
         for col, key in enumerate(row4_keys):
-            # Create button with explicit font
+            # Create button
             btn = QPushButton(key)
             
-            # Set explicit font for the button
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn.setFont(btn_font)
-            
-            # Apply stylesheet
-            btn.setStyleSheet(button_style)
-            btn.setFixedSize(button_size, button_size)  # Larger buttons for better visibility
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(button_size))
+            btn.setFixedSize(button_size, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -481,11 +454,6 @@ class SinhalaKeyboard(QFrame):
 
         # Add Space button
         space_btn = QPushButton("Space")
-        
-        # Set explicit font for the button (use system font for English text)
-        space_font = QFont("Arial", self.font_size - 4)
-        space_btn.setFont(space_font)
-        
         space_btn.setStyleSheet(self.get_space_button_style())
         space_btn.setFixedHeight(button_size)
         space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))
@@ -495,11 +463,6 @@ class SinhalaKeyboard(QFrame):
 
         # Add Backspace button
         backspace_btn = QPushButton("Backspace")
-        
-        # Set explicit font for the button (use system font for English text)
-        backspace_font = QFont("Arial", self.font_size - 4)
-        backspace_btn.setFont(backspace_font)
-        
         backspace_btn.setStyleSheet(self.get_backspace_button_style())
         backspace_btn.setFixedHeight(button_size)
         backspace_btn.clicked.connect(lambda checked=False, b=backspace_btn: self.on_key_clicked("Backspace", b))
@@ -508,9 +471,25 @@ class SinhalaKeyboard(QFrame):
         grid_layout.addWidget(backspace_btn, 4, 13, 1, 2)
 
         main_layout.addLayout(grid_layout)
+        
+        # Add resize handle indicator at the bottom
+        resize_hint = QLabel("▲ Drag edges to resize ▼")
+        resize_hint.setAlignment(Qt.AlignCenter)
+        resize_hint.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 2px;
+                background-color: transparent;
+                border-top: 1px dotted #aaaaaa;
+                border-bottom: 1px dotted #aaaaaa;
+            }
+        """)
+        main_layout.addWidget(resize_hint)
 
-        # Set size policy to make the keyboard fit within the window
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Set size policy to make the keyboard fit within the window but allow vertical resizing
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
     def on_key_clicked(self, key, button):
         """Handle key clicks with visual feedback"""
@@ -532,6 +511,10 @@ class SinhalaKeyboard(QFrame):
             # If no group defined, just emit the key
             self.keyPressed.emit(vowel)
             return
+
+        # Calculate current button size based on keyboard height
+        height_factor = self.height() / self.default_height
+        current_button_size = max(46, int((self.font_size + 20) * height_factor))
 
         # Create a dialog to show vowel variants
         dialog = QDialog(self.parent())
@@ -586,11 +569,15 @@ class SinhalaKeyboard(QFrame):
         # Add a label
         label = QLabel(f"Select a variant of {vowel}:")
         label.setAlignment(Qt.AlignCenter)
-        label.setFont(QFont("Arial", self.font_size - 8))  # Use a slightly smaller font for the label
+        
+        # Calculate font size based on current keyboard size
+        adjusted_font_size = max(self.font_size - 8, int((self.font_size - 8) * height_factor))
+        
+        # Set style with font size
         if self.dark_mode:
-            label.setStyleSheet(f"color: #ffffff; font-size: {self.font_size - 8}px;")
+            label.setStyleSheet(f"color: #ffffff; font-size: {adjusted_font_size}px;")
         else:
-            label.setStyleSheet(f"color: #000000; font-size: {self.font_size - 8}px;")
+            label.setStyleSheet(f"color: #000000; font-size: {adjusted_font_size}px;")
         layout.addWidget(label)
 
         # Create a grid for the vowel variants
@@ -601,13 +588,12 @@ class SinhalaKeyboard(QFrame):
         variants = self.vowel_groups[vowel]
         for i, variant in enumerate(variants):
             btn = QPushButton(variant)
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn_font.setBold(True)
-            btn.setFont(btn_font)
             
-            # Set fixed size based on font size
-            button_size = max(46, self.font_size + 20)
-            btn.setFixedSize(button_size, button_size)
+            # Use the same button size as the main keyboard
+            btn.setFixedSize(current_button_size, current_button_size)
+            
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(current_button_size))
             
             # Apply theme-specific styling
             if self.dark_mode:
@@ -690,6 +676,10 @@ class SinhalaKeyboard(QFrame):
 
     def show_vowel_modifiers(self, consonant):
         """Show a dialog with vowel modifier options for the selected consonant"""
+        # Calculate current button size based on keyboard height
+        height_factor = self.height() / self.default_height
+        current_button_size = max(46, int((self.font_size + 20) * height_factor))
+        
         # Create a dialog to show vowel modifiers
         dialog = QDialog(self.parent())
         dialog.setWindowTitle(f"Vowel Modifiers for {consonant}")
@@ -743,11 +733,15 @@ class SinhalaKeyboard(QFrame):
         # Add a label
         label = QLabel(f"Select a vowel modifier for {consonant}:")
         label.setAlignment(Qt.AlignCenter)
-        label.setFont(QFont("Arial", self.font_size - 8))  # Use a slightly smaller font for the label
+        
+        # Calculate font size based on current keyboard size
+        adjusted_font_size = max(self.font_size - 8, int((self.font_size - 8) * height_factor))
+        
+        # Set style with font size
         if self.dark_mode:
-            label.setStyleSheet(f"color: #ffffff; font-size: {self.font_size - 8}px;")
+            label.setStyleSheet(f"color: #ffffff; font-size: {adjusted_font_size}px;")
         else:
-            label.setStyleSheet(f"color: #000000; font-size: {self.font_size - 8}px;")
+            label.setStyleSheet(f"color: #000000; font-size: {adjusted_font_size}px;")
         layout.addWidget(label)
 
         # Create a grid for the vowel modifiers
@@ -760,13 +754,12 @@ class SinhalaKeyboard(QFrame):
         # Add buttons for each modifier
         # First add the base consonant (no modifier)
         btn = QPushButton(consonant)
-        btn_font = QFont(self.keyboard_font_family, self.font_size)
-        btn_font.setBold(True)
-        btn.setFont(btn_font)
         
-        # Set fixed size based on font size
-        button_size = max(46, self.font_size + 20)
-        btn.setFixedSize(button_size, button_size)
+        # Use the same button size as the main keyboard
+        btn.setFixedSize(current_button_size, current_button_size)
+        
+        # Apply stylesheet which includes font settings
+        btn.setStyleSheet(self.get_button_style(current_button_size))
         
         # Apply theme-specific styling
         if self.dark_mode:
@@ -820,13 +813,12 @@ class SinhalaKeyboard(QFrame):
             combined = consonant + modifier
             
             btn = QPushButton(combined)
-            btn_font = QFont(self.keyboard_font_family, self.font_size)
-            btn_font.setBold(True)
-            btn.setFont(btn_font)
             
-            # Set fixed size based on font size
-            button_size = max(46, self.font_size + 20)
-            btn.setFixedSize(button_size, button_size)
+            # Use the same button size as the main keyboard and other buttons in this dialog
+            btn.setFixedSize(current_button_size, current_button_size)
+            
+            # Apply stylesheet which includes font settings
+            btn.setStyleSheet(self.get_button_style(current_button_size))
             
             # Apply theme-specific styling
             if self.dark_mode:
@@ -924,3 +916,74 @@ class SinhalaKeyboard(QFrame):
         # This method is called when a key is pressed on the keyboard
         # It emits the keyPressed signal with the text of the key
         self.keyPressed.emit(text)
+        
+    # --- Resize handling methods ---
+    
+    def resizeEvent(self, event):
+        """Handle resize events to update button sizes"""
+        super().resizeEvent(event)
+        
+        # Only update if not in the middle of a resize operation
+        if not self.resize_in_progress and event.size().height() != event.oldSize().height():
+            self.update_buttons()
+            # Emit signal with new height
+            self.keyboardResized.emit(self.height())
+            
+    def mousePressEvent(self, event):
+        """Handle mouse press events for resizing"""
+        super().mousePressEvent(event)
+        
+        # Check if mouse is in the resize area (top 10 pixels or bottom 10 pixels)
+        if event.position().y() < 10:  # Top edge for resizing down
+            self.resize_in_progress = True
+            self.resize_direction = "top"
+            self.setCursor(Qt.SizeVerCursor)
+            self.initial_mouse_pos = event.position().y()
+            self.initial_height = self.height()
+        elif event.position().y() > self.height() - 10:  # Bottom edge for resizing up
+            self.resize_in_progress = True
+            self.resize_direction = "bottom"
+            self.setCursor(Qt.SizeVerCursor)
+            self.initial_mouse_pos = event.position().y()
+            self.initial_height = self.height()
+            
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events for resizing"""
+        super().mouseMoveEvent(event)
+        
+        # Show resize cursor when hovering over the resize areas
+        if not self.resize_in_progress:
+            if event.position().y() < 10 or event.position().y() > self.height() - 10:
+                self.setCursor(Qt.SizeVerCursor)
+            else:
+                self.setCursor(Qt.ArrowCursor)
+            
+        # Perform resize if in progress
+        if self.resize_in_progress:
+            # Calculate new height based on resize direction
+            delta = event.position().y() - self.initial_mouse_pos
+            
+            if self.resize_direction == "top":
+                # When dragging from top, invert the delta (drag down = smaller)
+                new_height = max(self.minimumHeight(), self.initial_height - delta)
+            else:  # bottom
+                new_height = max(self.minimumHeight(), self.initial_height + delta)
+            
+            # Resize the keyboard
+            self.setFixedHeight(new_height)
+            
+            # Update buttons to match new size
+            self.update_buttons()
+            
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release events for resizing"""
+        super().mouseReleaseEvent(event)
+        
+        # End resize operation
+        if self.resize_in_progress:
+            self.resize_in_progress = False
+            self.resize_direction = None
+            self.setCursor(Qt.ArrowCursor)
+            
+            # Emit signal with new height
+            self.keyboardResized.emit(self.height())

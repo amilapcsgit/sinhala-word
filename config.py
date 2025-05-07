@@ -16,7 +16,7 @@ USER_DICT_FILE = os.path.join(APP_DIR, "sinhalawordmap.json")
 LEXICON_DIR = os.path.join(APP_DIR, "dictionary", "chunks")
 
 # Default font settings
-DEFAULT_FONT = "Iskoola Pota"
+DEFAULT_FONT = "UN-Ganganee"  # Use a Sinhala font that's included in our fonts directory
 DEFAULT_FONT_SIZE = 14
 DEFAULT_WINDOW_SIZE = (1100, 780)
 
@@ -28,6 +28,7 @@ DEFAULT_PREFERENCES = {
     "theme": "light",
     "font": DEFAULT_FONT,
     "font_size": DEFAULT_FONT_SIZE,
+    "keyboard_font_size": 26,  # Default keyboard font size
     "window_size": DEFAULT_WINDOW_SIZE,
     "show_keyboard": True,
     "show_suggestions": True,

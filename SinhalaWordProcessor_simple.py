@@ -30,6 +30,10 @@ import json
 import re
 import gzip
 import logging
+
+# Disable system font fallbacks before importing Qt modules
+os.environ["QT_ENABLE_FONT_FALLBACKS"] = "0"
+os.environ["QT_FONT_NO_SYSTEM_FALLBACKS"] = "1"
 from PySide6.QtWidgets import (
     QApplication, QTextEdit, QFileDialog, QToolBar, QWidget, QVBoxLayout,
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
@@ -40,13 +44,14 @@ from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, 
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 
 # Import our custom modules
-from pyside_keyboard import SinhalaKeyboard
+from pyside_keyboard_fixed import SinhalaKeyboard
 from theme_manager import ThemeManager
 import config
 from transliterator import SinhalaTransliterator
 from spellchecker import SinhalaSpellChecker
 from input_handler import SinhalaInputHandler
 from suggestion_popup import SuggestionPopup
+from settings_dialog import SettingsDialog
 
 # Set up logging
 logging.basicConfig(
@@ -73,10 +78,24 @@ class FontSizeDelegate(QStyledItemDelegate):
 # Path to the fonts directory - use absolute path to ensure it works correctly
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 
+def disable_system_font_fallbacks():
+    """Disable system font fallbacks to prevent Qt from using system fonts."""
+    try:
+        # This is a workaround to prevent Qt from using system fonts
+        # Set an environment variable to disable OpenType support for system fonts
+        os.environ["QT_ENABLE_FONT_FALLBACKS"] = "0"
+        os.environ["QT_FONT_NO_SYSTEM_FALLBACKS"] = "1"
+        logging.info("Disabled system font fallbacks")
+    except Exception as e:
+        logging.error(f"Failed to disable system font fallbacks: {e}")
+
 def load_sinhala_fonts():
     """Load Sinhala fonts from the fonts directory."""
     global FONTS_DIR
     font_families = []
+    
+    # Disable system font fallbacks
+    disable_system_font_fallbacks()
     
     # Check if fonts directory exists
     if not os.path.exists(FONTS_DIR):
@@ -90,6 +109,8 @@ def load_sinhala_fonts():
     # Load fonts from directory
     if os.path.exists(FONTS_DIR):
         logging.info(f"Loading fonts from: {FONTS_DIR}")
+        
+        # Load only fonts from our fonts directory
         for font_file in os.listdir(FONTS_DIR):
             if font_file.lower().endswith(('.ttf', '.otf')):
                 font_path = os.path.join(FONTS_DIR, font_file)
@@ -103,9 +124,8 @@ def load_sinhala_fonts():
     else:
         logging.error(f"Fonts directory not found: {FONTS_DIR}")
     
-    # Log all available font families for debugging
-    all_fonts = QFontDatabase.families()
-    logging.info(f"All available font families: {', '.join(all_fonts)}")
+    # Log only the fonts we've loaded, not all system fonts
+    logging.info(f"Loaded Sinhala font families: {', '.join(font_families)}")
     
     return font_families
 
@@ -160,20 +180,29 @@ class SinhalaWordApp(QMainWindow):
 
         # --- Load Sinhala Fonts ---
         self.sinhala_font_families = load_sinhala_fonts()
-        font_name = self.preferences["font"]
         font_size = self.preferences["font_size"]
         
-        # If we have Sinhala fonts loaded, prefer those
-        if self.sinhala_font_families and font_name not in self.sinhala_font_families:
-            # Use the first available Sinhala font if preferred font not in our loaded fonts
-            if self.sinhala_font_families:
+        # Always use a font from our loaded Sinhala fonts
+        if self.sinhala_font_families:
+            # Check if preferred font is in our loaded fonts
+            preferred_font = self.preferences["font"]
+            if preferred_font in self.sinhala_font_families:
+                font_name = preferred_font
+            else:
+                # Use the first available Sinhala font if preferred font not in our loaded fonts
                 font_name = self.sinhala_font_families[0]
                 # Update preferences
                 self.preferences["font"] = font_name
-                logging.info(f"Using Sinhala font: {font_name}")
+            
+            logging.info(f"Using Sinhala font: {font_name}")
+        else:
+            # Fallback to a default font if no Sinhala fonts were loaded
+            font_name = "UN-Ganganee"
+            logging.warning(f"No Sinhala fonts loaded, using default: {font_name}")
         
-        # Create the font
+        # Create the font with a strategy that allows system fonts for English text
         self.base_font = QFont(font_name, font_size)
+        # Use PreferMatch instead of NoFontMerging to allow system fonts for English characters
         self.base_font.setStyleHint(QFont.StyleHint.AnyStyle, QFont.StyleStrategy.PreferMatch)
         
         # Apply to editor
@@ -264,9 +293,10 @@ class SinhalaWordApp(QMainWindow):
 
         # --- On-screen Keyboard Area ---
         # Create the Sinhala keyboard using our custom implementation with dark mode support
-        # Initialize with dark mode based on current theme
+        # Initialize with dark mode based on current theme and default font size
         is_dark_mode = self.theme_manager.is_dark_mode()
-        self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode)
+        keyboard_font_size = self.preferences.get("keyboard_font_size", 26)  # Default to 26 if not set
+        self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode, font_size=keyboard_font_size)
         self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
         # Show keyboard based on preferences
         if self.preferences["show_keyboard"]:
@@ -295,12 +325,18 @@ class SinhalaWordApp(QMainWindow):
         main_layout.addWidget(self.editor)
 
         # Add keyboard area with fixed height
-        keyboard_container = QWidget()
-        keyboard_container.setFixedHeight(220)  # Fixed height for keyboard
-        keyboard_layout = QVBoxLayout(keyboard_container)
+        self.keyboard_container = QWidget()
+        self.keyboard_container.setFixedHeight(220)  # Fixed height for keyboard
+        keyboard_layout = QVBoxLayout(self.keyboard_container)
         keyboard_layout.addWidget(self.keyboard_area)
         keyboard_layout.setContentsMargins(2, 2, 2, 2)
-        main_layout.addWidget(keyboard_container)
+        main_layout.addWidget(self.keyboard_container)
+        
+        # Show/hide keyboard container based on preferences
+        if self.preferences["show_keyboard"]:
+            self.keyboard_container.show()
+        else:
+            self.keyboard_container.hide()
 
         # Configure layout properties
         main_layout.setContentsMargins(0, 0, 0, 0) # Remove margins
@@ -537,7 +573,8 @@ class SinhalaWordApp(QMainWindow):
 
     def toggle_keyboard(self):
         """Toggle on-screen keyboard visibility."""
-        if self.keyboard_area.isVisible():
+        if self.keyboard_container.isVisible():
+            self.keyboard_container.hide()
             self.keyboard_area.hide()
             if hasattr(self, 'keyboard_toggle_action'):
                 # Keep the text as "Sinhala Keyboard" but update checked state
@@ -545,6 +582,7 @@ class SinhalaWordApp(QMainWindow):
             # Update preferences
             self.preferences["show_keyboard"] = False
         else:
+            self.keyboard_container.show()
             self.keyboard_area.show()
             if hasattr(self, 'keyboard_toggle_action'):
                 # Keep the text as "Sinhala Keyboard" but update checked state
@@ -1206,6 +1244,15 @@ class SinhalaWordApp(QMainWindow):
 
         # Add toggle Singlish action
         view_menu.addAction(self.singlish_toggle_action)
+        
+        # Add separator
+        view_menu.addSeparator()
+        
+        # Add settings action
+        self.settings_action = QAction("Settings...", self)
+        self.settings_action.setShortcut("Ctrl+,")
+        self.settings_action.triggered.connect(self.show_settings_dialog)
+        view_menu.addAction(self.settings_action)
 
         # Help Menu
         help_menu = menu_bar.addMenu("&Help")
@@ -2071,6 +2118,54 @@ class SinhalaWordApp(QMainWindow):
         except Exception as e:
             logger.error(f"An error occurred during dictionary loading: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load dictionaries: {e}")
+    
+    def show_settings_dialog(self):
+        """Show the settings dialog."""
+        dialog = SettingsDialog(self, self.preferences)
+        dialog.settingsApplied.connect(self.apply_settings)
+        if dialog.exec():
+            logger.info("Settings applied")
+    
+    def apply_settings(self, settings):
+        """Apply settings from the settings dialog."""
+        # Update preferences
+        for key, value in settings.items():
+            self.preferences[key] = value
+        
+        # Save preferences
+        config.save_user_preferences(self.preferences)
+        
+        # Apply font settings
+        self.base_font = QFont(
+            self.preferences["font"], 
+            self.preferences["font_size"]
+        )
+        # Use PreferMatch to allow system fonts for English characters
+        self.base_font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+        self.editor.setFont(self.base_font)
+        
+        # Apply keyboard settings
+        self.keyboard_area.font_size = self.preferences["keyboard_font_size"]
+        self.keyboard_area.update_theme()  # This will update the button styles
+        
+        # Apply keyboard visibility
+        if self.preferences["show_keyboard"]:
+            self.keyboard_container.show()
+            self.keyboard_area.show()
+        else:
+            self.keyboard_container.hide()
+            self.keyboard_area.hide()
+        
+        # Update toggle actions
+        self.singlish_toggle_action.setChecked(self.preferences["singlish_enabled"])
+        self.singlish_toggle_action.setText("Singlish: On" if self.preferences["singlish_enabled"] else "Singlish: Off")
+        
+        self.suggestions_toggle_action.setChecked(self.preferences["show_suggestions"])
+        self.suggestions_toggle_action.setText("Suggestions: On" if self.preferences["show_suggestions"] else "Suggestions: Off")
+        
+        self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"])
+        
+        logger.info("Settings applied successfully")
 
 
 # ------------------------------------------------------------------
@@ -2082,6 +2177,11 @@ def main():
 
     # Create QApplication
     app = QApplication(sys.argv)
+    
+    # Set application-wide font policy to allow system fonts for English text
+    default_font = QFont()
+    default_font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+    QApplication.setFont(default_font)
 
     # Create and show the main window
     win = SinhalaWordApp()

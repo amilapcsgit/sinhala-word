@@ -1,7 +1,7 @@
 {
-    "theme": "light",
-    "font": "Abhaya Libre SemiBold",
-    "font_size": 48,
+    "theme": "dark",
+    "font": "UN-Ganganee",
+    "font_size": 28,
     "window_size": [
         1920,
         1137
@@ -12,5 +12,6 @@
     "recent_files": [
         "C:/sinhalaword/sinhala-word/sinhala word working output.txt",
         "C:/sinhala word/sinhala word working output.txt"
-    ]
+    ],
+    "keyboard_font_size": 42
 }

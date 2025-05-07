@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QWidget, 
                           QSizePolicy, QDialog, QLabel, QGridLayout)
 from PySide6.QtCore import Qt, Signal, QObject, QEvent
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QCursor
 
 class SinhalaKeyboard(QFrame):
     """PySide6 implementation of the Sinhala Keyboard"""
@@ -463,8 +463,6 @@ class SinhalaKeyboard(QFrame):
 
         # Row 4: Remaining consonants and special characters
         row4_keys = ['ළ', 'ෆ', 'ං', 'ඃ', '්', 'ා', 'ැ', 'ෑ', 'ි', 'ී']
-
-        # Add Space and Backspace buttons to the last row
         for col, key in enumerate(row4_keys):
             # Create button with explicit font
             btn = QPushButton(key)
@@ -548,7 +546,9 @@ class SinhalaKeyboard(QFrame):
             def eventFilter(self, obj, event):
                 if event.type() == QEvent.Type.MouseButtonPress:
                     # Check if the click is outside the dialog
-                    if not dialog.geometry().contains(event.globalPos()):
+                    # Use event.globalPosition().toPoint() instead of deprecated globalPos()
+                    global_pos = event.globalPosition().toPoint() if hasattr(event, 'globalPosition') else event.globalPos()
+                    if not dialog.geometry().contains(global_pos):
                         dialog.close()
                         return True
                 return False
@@ -579,26 +579,36 @@ class SinhalaKeyboard(QFrame):
             """)
 
         # Create layout for the dialog
-        layout = QVBoxLayout(dialog)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
 
-        # Add title label with theme-specific styling
-        title_label = QLabel(f"Select a vowel variant")
+        # Add a label
+        label = QLabel(f"Select a variant of {vowel}:")
+        label.setAlignment(Qt.AlignCenter)
+        label.setFont(QFont("Arial", self.font_size - 8))  # Use a slightly smaller font for the label
         if self.dark_mode:
-            title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #ffffff;")
+            label.setStyleSheet(f"color: #ffffff; font-size: {self.font_size - 8}px;")
         else:
-            title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #000000;")
-        layout.addWidget(title_label)
+            label.setStyleSheet(f"color: #000000; font-size: {self.font_size - 8}px;")
+        layout.addWidget(label)
 
-        # Create grid layout for vowel buttons
+        # Create a grid for the vowel variants
         grid = QGridLayout()
         grid.setSpacing(5)
 
-        # Add buttons for each vowel variant
-        for i, variant in enumerate(self.vowel_groups[vowel]):
+        # Add buttons for each variant
+        variants = self.vowel_groups[vowel]
+        for i, variant in enumerate(variants):
             btn = QPushButton(variant)
-            btn.setFixedSize(50, 50)
-            btn.setFont(QFont("Iskoola Pota", 22, QFont.Bold))
-
+            btn_font = QFont(self.keyboard_font_family, self.font_size)
+            btn_font.setBold(True)
+            btn.setFont(btn_font)
+            
+            # Set fixed size based on font size
+            button_size = max(46, self.font_size + 20)
+            btn.setFixedSize(button_size, button_size)
+            
             # Apply theme-specific styling
             if self.dark_mode:
                 btn.setStyleSheet("""
@@ -650,6 +660,22 @@ class SinhalaKeyboard(QFrame):
         # Position the dialog near the button
         button_pos = button.mapToGlobal(button.rect().topLeft())
         dialog.move(button_pos.x(), button_pos.y() - 80)
+        
+        # Make sure the dialog is visible on the current screen
+        screen_geometry = self.screen().geometry()
+        dialog_geometry = dialog.geometry()
+        
+        # Adjust if the dialog is outside the screen
+        if not screen_geometry.contains(dialog_geometry):
+            # If outside screen, reposition to be visible
+            if dialog_geometry.right() > screen_geometry.right():
+                dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
+            if dialog_geometry.bottom() > screen_geometry.bottom():
+                dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
+            if dialog_geometry.left() < screen_geometry.left():
+                dialog.move(screen_geometry.left(), dialog_geometry.y())
+            if dialog_geometry.top() < screen_geometry.top():
+                dialog.move(dialog_geometry.x(), screen_geometry.top())
 
         # Show the dialog
         dialog.exec_()
@@ -677,7 +703,9 @@ class SinhalaKeyboard(QFrame):
             def eventFilter(self, obj, event):
                 if event.type() == QEvent.Type.MouseButtonPress:
                     # Check if the click is outside the dialog
-                    if not dialog.geometry().contains(event.globalPos()):
+                    # Use event.globalPosition().toPoint() instead of deprecated globalPos()
+                    global_pos = event.globalPosition().toPoint() if hasattr(event, 'globalPosition') else event.globalPos()
+                    if not dialog.geometry().contains(global_pos):
                         dialog.close()
                         return True
                 return False
@@ -708,41 +736,46 @@ class SinhalaKeyboard(QFrame):
             """)
 
         # Create layout for the dialog
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
 
-        # Add title label with theme-specific styling
-        title_label = QLabel(f"Select a vowel modifier for '{consonant}'")
+        # Add a label
+        label = QLabel(f"Select a vowel modifier for {consonant}:")
+        label.setAlignment(Qt.AlignCenter)
+        label.setFont(QFont("Arial", self.font_size - 8))  # Use a slightly smaller font for the label
         if self.dark_mode:
-            title_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #ffffff;")
+            label.setStyleSheet(f"color: #ffffff; font-size: {self.font_size - 8}px;")
         else:
-            title_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #000000;")
-        layout.addWidget(title_label)
+            label.setStyleSheet(f"color: #000000; font-size: {self.font_size - 8}px;")
+        layout.addWidget(label)
 
-        # Create grid layout for modifier buttons
+        # Create a grid for the vowel modifiers
         grid = QGridLayout()
-        grid.setSpacing(4)
+        grid.setSpacing(5)
 
         # Get valid modifiers for this consonant
         valid_modifiers = self.valid_modifiers.get(consonant, self.valid_modifiers['DEFAULT'])
 
-        # Add buttons for each vowel modifier
-        row, col = 0, 0
-        max_cols = 5  # Increase number of columns in the grid
-
-        # First add the base consonant (no modifier) with theme-specific styling
-        base_btn = QPushButton(consonant)
-        base_btn.setFixedSize(50, 50)
-        base_btn.setFont(QFont("Iskoola Pota", 18, QFont.Bold))
-
+        # Add buttons for each modifier
+        # First add the base consonant (no modifier)
+        btn = QPushButton(consonant)
+        btn_font = QFont(self.keyboard_font_family, self.font_size)
+        btn_font.setBold(True)
+        btn.setFont(btn_font)
+        
+        # Set fixed size based on font size
+        button_size = max(46, self.font_size + 20)
+        btn.setFixedSize(button_size, button_size)
+        
+        # Apply theme-specific styling
         if self.dark_mode:
-            base_btn.setStyleSheet("""
+            btn.setStyleSheet("""
                 QPushButton {
                     background-color: #3c3c3c;
                     color: #ffffff;
                     border: 1px solid #555555;
-                    border-radius: 6px;
+                    border-radius: 8px;
                 }
                 QPushButton:hover {
                     background-color: #4d4d4d;
@@ -754,12 +787,12 @@ class SinhalaKeyboard(QFrame):
                 }
             """)
         else:
-            base_btn.setStyleSheet("""
+            btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffffff;
                     color: #000000;
                     border: 1px solid #aaaaaa;
-                    border-radius: 6px;
+                    border-radius: 8px;
                 }
                 QPushButton:hover {
                     background-color: #e6f0ff;
@@ -771,39 +804,38 @@ class SinhalaKeyboard(QFrame):
                 }
             """)
 
-        base_btn.clicked.connect(lambda checked=False, c=consonant: self.select_modifier(dialog, c, ''))
-        grid.addWidget(base_btn, row, col)
+        # Use a closure to capture the current value
+        btn.clicked.connect(lambda checked=False, c=consonant: self.select_consonant_with_modifier(dialog, c, ''))
+        grid.addWidget(btn, 0, 0)
 
-        col += 1
-        if col >= max_cols:
-            col = 0
-            row += 1
-
-        # Add buttons for each valid vowel modifier
+        # Add buttons for each modifier
+        col = 1
+        row = 0
         for modifier in valid_modifiers:
-            if modifier == '':  # Skip the empty modifier (already added)
+            # Skip empty modifier as we already added it
+            if modifier == '':
                 continue
-
-            # Create the combined character (consonant + modifier)
-            if modifier == '්':  # Hal kirima is a special case
-                combined = consonant + modifier
-            elif modifier in ['ෙ', 'ේ', 'ෛ', 'ො', 'ෝ', 'ෞ']:  # Modifiers that go before the consonant
-                combined = modifier + consonant
-            else:  # Modifiers that go after the consonant
-                combined = consonant + modifier
-
-            # Create button for this modifier with theme-specific styling
+                
+            # Create a combined character (consonant + modifier)
+            combined = consonant + modifier
+            
             btn = QPushButton(combined)
-            btn.setFixedSize(50, 50)
-            btn.setFont(QFont("Iskoola Pota", 18, QFont.Bold))
-
+            btn_font = QFont(self.keyboard_font_family, self.font_size)
+            btn_font.setBold(True)
+            btn.setFont(btn_font)
+            
+            # Set fixed size based on font size
+            button_size = max(46, self.font_size + 20)
+            btn.setFixedSize(button_size, button_size)
+            
+            # Apply theme-specific styling
             if self.dark_mode:
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #3c3c3c;
                         color: #ffffff;
                         border: 1px solid #555555;
-                        border-radius: 6px;
+                        border-radius: 8px;
                     }
                     QPushButton:hover {
                         background-color: #4d4d4d;
@@ -820,7 +852,7 @@ class SinhalaKeyboard(QFrame):
                         background-color: #ffffff;
                         color: #000000;
                         border: 1px solid #aaaaaa;
-                        border-radius: 6px;
+                        border-radius: 8px;
                     }
                     QPushButton:hover {
                         background-color: #e6f0ff;
@@ -832,13 +864,14 @@ class SinhalaKeyboard(QFrame):
                     }
                 """)
 
-            # Use a closure to capture the current value of combined
-            combined_fixed = combined  # Create a fixed reference
-            btn.clicked.connect(lambda checked=False, c=combined_fixed: self.select_modifier(dialog, c, ''))
+            # Use a closure to capture the current values
+            modifier_fixed = modifier  # Create a fixed reference
+            btn.clicked.connect(lambda checked=False, c=consonant, m=modifier_fixed: self.select_consonant_with_modifier(dialog, c, m))
+            
+            # Add to grid, wrapping to next row after 5 columns
             grid.addWidget(btn, row, col)
-
             col += 1
-            if col >= max_cols:
+            if col > 4:  # 5 columns (0-4)
                 col = 0
                 row += 1
 
@@ -846,29 +879,48 @@ class SinhalaKeyboard(QFrame):
 
         # Set dialog properties
         dialog.setLayout(layout)
-        dialog.setMinimumWidth(280)
-        # Use Qt.Popup flag to make it close when clicking outside
-        dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        dialog.setMinimumWidth(300)
+        dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)  # Removed Qt.Popup flag
 
-        # Position the dialog near the parent widget
-        parent_pos = self.mapToGlobal(self.rect().center())
-        dialog.move(parent_pos.x() - dialog.width()/2, parent_pos.y() - 250)
+        # Position the dialog near the cursor
+        cursor_pos = QCursor.pos()
+        dialog.move(cursor_pos.x() - 150, cursor_pos.y() - 150)
+        
+        # If we can't get cursor position, try to position relative to the keyboard
+        if cursor_pos.isNull():
+            keyboard_pos = self.mapToGlobal(self.rect().topLeft())
+            dialog.move(keyboard_pos.x() + 100, keyboard_pos.y() - 200)
+            
+        # Make sure the dialog is visible on the current screen
+        screen_geometry = self.screen().geometry()
+        dialog_geometry = dialog.geometry()
+        
+        # Adjust if the dialog is outside the screen
+        if not screen_geometry.contains(dialog_geometry):
+            # If outside screen, reposition to be visible
+            if dialog_geometry.right() > screen_geometry.right():
+                dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
+            if dialog_geometry.bottom() > screen_geometry.bottom():
+                dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
+            if dialog_geometry.left() < screen_geometry.left():
+                dialog.move(screen_geometry.left(), dialog_geometry.y())
+            if dialog_geometry.top() < screen_geometry.top():
+                dialog.move(dialog_geometry.x(), screen_geometry.top())
 
         # Show the dialog
         dialog.exec_()
 
-    def select_modifier(self, dialog, combined_char, modifier):
-        """Handle selection of a vowel modifier"""
+    def select_consonant_with_modifier(self, dialog, consonant, modifier):
+        """Handle selection of a consonant with a modifier"""
         # Close the dialog
         dialog.accept()
 
-        # Emit the key press signal with the combined character
-        self.keyPressed.emit(combined_char)
+        # Emit the key press signal with the selected consonant + modifier
+        combined = consonant + modifier
+        self.keyPressed.emit(combined)
 
-    def show(self):
-        """Show the keyboard"""
-        super().show()
-
-    def hide(self):
-        """Hide the keyboard"""
-        super().hide()
+    def on_keyboard_button_clicked(self, text):
+        """Handle keyboard button clicks"""
+        # This method is called when a key is pressed on the keyboard
+        # It emits the keyPressed signal with the text of the key
+        self.keyPressed.emit(text)

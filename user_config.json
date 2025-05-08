@@ -3,8 +3,8 @@
     "font": "UN-Ganganee",
     "font_size": 72,
     "window_size": [
-        1728,
-        1044
+        1920,
+        1137
     ],
     "show_keyboard": true,
     "show_suggestions": true,
@@ -14,5 +14,5 @@
         "C:/sinhala word/sinhala word working output.txt"
     ],
     "keyboard_font_size": 30,
-    "keyboard_height": 425
+    "keyboard_height": 335
 }

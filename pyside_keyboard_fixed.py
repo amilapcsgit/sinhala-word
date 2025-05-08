@@ -1,7 +1,13 @@
+import os
+# Allow limited font fallbacks for better compatibility
+# We'll handle font fallbacks more carefully in the code
+os.environ["QT_ENABLE_FONT_FALLBACKS"] = "1"
+os.environ["QT_FONT_NO_SYSTEM_FALLBACKS"] = "0"
+
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QWidget, 
                           QSizePolicy, QDialog, QLabel, QGridLayout, QSplitter)
 from PySide6.QtCore import Qt, Signal, QObject, QEvent, QSize
-from PySide6.QtGui import QColor, QFont, QCursor, QResizeEvent
+from PySide6.QtGui import QColor, QFont, QCursor, QResizeEvent, QFontDatabase
 
 class SinhalaKeyboard(QFrame):
     """PySide6 implementation of the Sinhala Keyboard with resizing capability"""
@@ -44,34 +50,60 @@ class SinhalaKeyboard(QFrame):
         # Enable mouse tracking for resize operations
         self.setMouseTracking(True)
         
-        # Set minimum height
-        self.setMinimumHeight(180)
+        # Set minimum height - allow for smaller keyboard
+        self.setMinimumHeight(120)
         
         # Set size policy to allow vertical resizing
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         
     def load_keyboard_font(self):
         """Load Sinhala font for the keyboard buttons"""
-        import os
-        from PySide6.QtGui import QFontDatabase, QFont
-        
         # Prioritized list of Sinhala fonts that are known to work well
-        # Only try fonts that are likely to be installed on Windows systems
-        system_sinhala_fonts = ["Iskoola Pota", "Nirmala UI"]
+        # Try both embedded and system fonts
+        sinhala_fonts = ["UN-Ganganee", "Iskoola Pota", "Nirmala UI"]
         
-        # First try to use system Sinhala fonts that are known to work well
-        for font_name in system_sinhala_fonts:
-            # Check if font exists in the system
-            font = QFont(font_name)
-            if font.exactMatch() or font.family() == font_name:
-                self.keyboard_font_family = font_name
-                print(f"Using system Sinhala font for keyboard: {font_name}")
-                return
-        
-        # If no system Sinhala fonts found, use a simple fallback
-        # that's guaranteed to work without causing OpenType errors
-        print("No Sinhala system fonts found, using fallback font")
-        self.keyboard_font_family = "Arial"
+        try:
+            # First check if our embedded UN-Ganganee font is available
+            # This should be loaded by the main application
+            for font_name in sinhala_fonts:
+                try:
+                    # Check if font exists in the system
+                    if QFontDatabase.hasFamily(font_name):
+                        # Test if we can create a font with this family
+                        test_font = QFont(font_name)
+                        test_font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+                        
+                        # If we get here, the font is usable
+                        self.keyboard_font_family = font_name
+                        print(f"Using Sinhala font for keyboard: {font_name}")
+                        return
+                except Exception as font_error:
+                    print(f"Error testing font {font_name}: {font_error}")
+                    continue
+            
+            # If we get here, none of the preferred fonts worked
+            # Try to find any font with "Sinhala" in the name
+            all_fonts = QFontDatabase.families()
+            for font_name in all_fonts:
+                if "sinhala" in font_name.lower() or "iskoola" in font_name.lower():
+                    try:
+                        test_font = QFont(font_name)
+                        self.keyboard_font_family = font_name
+                        print(f"Found alternative Sinhala font: {font_name}")
+                        return
+                    except:
+                        continue
+            
+            # If no suitable Sinhala fonts found, use a simple fallback
+            # that's guaranteed to work without causing OpenType errors
+            print("No Sinhala fonts found, using default system font")
+            # Use a system font that should be available on all systems
+            self.keyboard_font_family = "Arial"
+            
+        except Exception as e:
+            print(f"Error in load_keyboard_font: {e}")
+            # Use a guaranteed system font as fallback
+            self.keyboard_font_family = "Arial"
 
     def setup_keyboard_properties(self):
         """Define keyboard layouts and properties"""
@@ -183,38 +215,61 @@ class SinhalaKeyboard(QFrame):
         
     def update_buttons(self):
         """Update all existing buttons with the current style and size"""
-        # Calculate button size based on keyboard height
-        if self.height() > 0:
-            # Calculate button size proportionally to keyboard height
-            # Base size is font_size + 20, but adjust based on keyboard height
-            height_factor = self.height() / self.default_height
-            button_size = max(46, int((self.font_size + 20) * height_factor))
-        else:
-            button_size = max(46, self.font_size + 20)
-        
-        # Update all existing buttons
-        for child in self.findChildren(QPushButton):
-            if child.text() not in ["Space", "Backspace"]:
-                child.setStyleSheet(self.get_button_style(button_size))
-                child.setFixedSize(button_size, button_size)
-            elif child.text() == "Space":
-                child.setStyleSheet(self.get_space_button_style())
-                child.setFixedHeight(button_size)
-            elif child.text() == "Backspace":
-                child.setStyleSheet(self.get_backspace_button_style())
-                child.setFixedHeight(button_size)
+        try:
+            # Calculate button size based on keyboard height
+            if self.height() > 0:
+                # Calculate button size proportionally to keyboard height
+                # Base size is font_size + 20, but adjust based on keyboard height
+                height_factor = self.height() / self.default_height
+                button_size = max(46, int((self.font_size + 20) * height_factor))
+            else:
+                button_size = max(46, self.font_size + 20)
+            
+            # Calculate adjusted font size - use a more conservative approach
+            # Use a smaller font size for better rendering and to avoid OpenType errors
+            adjusted_font_size = max(self.font_size - 4, 12)
+            
+            # Create font with better fallback strategy
+            font = QFont(self.keyboard_font_family, adjusted_font_size)
+            # Use PreferMatch instead of NoFontMerging to allow some fallback
+            font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+            font.setBold(True)
+            
+            # Update all existing buttons
+            for child in self.findChildren(QPushButton):
+                try:
+                    # Set font directly with better fallback strategy
+                    child.setFont(font)
+                    
+                    if child.text() not in ["Space", "Backspace"]:
+                        child.setStyleSheet(self.get_button_style(button_size))
+                        child.setFixedSize(button_size, button_size)
+                    elif child.text() == "Space":
+                        child.setStyleSheet(self.get_space_button_style())
+                        child.setFixedHeight(button_size)
+                    elif child.text() == "Backspace":
+                        child.setStyleSheet(self.get_backspace_button_style())
+                        child.setFixedHeight(button_size)
+                except Exception as e:
+                    print(f"Error updating button {child.text()}: {e}")
+                    
+                    # If there was an error, try with a system font as fallback
+                    try:
+                        fallback_font = QFont("Arial", 12)
+                        child.setFont(fallback_font)
+                    except:
+                        pass
+        except Exception as e:
+            print(f"Error in update_buttons: {e}")
 
     def get_button_style(self, button_size):
         """Get the button style with the specified size based on current theme"""
-        # Calculate font size proportionally to button size
-        adjusted_font_size = max(self.font_size, int(self.font_size * button_size / (self.font_size + 20)))
+        # Note: Font settings are now applied directly to the button using setFont()
+        # to avoid font fallback issues
         
         if self.dark_mode:
             return f"""
                 QPushButton {{
-                    font-family: "{self.keyboard_font_family}";
-                    font-size: {adjusted_font_size}px;
-                    font-weight: bold;
                     border: 1px solid #555555;
                     border-radius: 6px;
                     background-color: #3c3c3c;
@@ -237,9 +292,6 @@ class SinhalaKeyboard(QFrame):
         else:
             return f"""
                 QPushButton {{
-                    font-family: "{self.keyboard_font_family}";
-                    font-size: {adjusted_font_size}px;
-                    font-weight: bold;
                     border: 1px solid #aaaaaa;
                     border-radius: 6px;
                     background-color: #ffffff;
@@ -277,8 +329,6 @@ class SinhalaKeyboard(QFrame):
         if self.dark_mode:
             return """
                 QPushButton {
-                    font-size: 14px;
-                    font-weight: bold;
                     border: 1px solid #555555;
                     border-radius: 6px;
                     background-color: #444444;
@@ -297,8 +347,6 @@ class SinhalaKeyboard(QFrame):
         else:
             return """
                 QPushButton {
-                    font-size: 14px;
-                    font-weight: bold;
                     border: 1px solid #aaaaaa;
                     border-radius: 6px;
                     background-color: #f0f0f0;
@@ -320,8 +368,6 @@ class SinhalaKeyboard(QFrame):
         if self.dark_mode:
             return """
                 QPushButton {
-                    font-size: 14px;
-                    font-weight: bold;
                     border: 1px solid #555555;
                     border-radius: 6px;
                     background-color: #444444;
@@ -340,8 +386,6 @@ class SinhalaKeyboard(QFrame):
         else:
             return """
                 QPushButton {
-                    font-size: 14px;
-                    font-weight: bold;
                     border: 1px solid #aaaaaa;
                     border-radius: 6px;
                     background-color: #f0f0f0;
@@ -358,6 +402,69 @@ class SinhalaKeyboard(QFrame):
                 }
             """
 
+    def create_button(self, text, button_size):
+        """Create a button with proper font settings to avoid font fallback issues"""
+        try:
+            # Create button with no text initially
+            btn = QPushButton()
+            
+            # Set font directly with better fallback strategy
+            # Use a smaller font size for better rendering and compatibility
+            adjusted_font_size = max(self.font_size - 6, 12)  # Even smaller for better compatibility
+            
+            # Create font with better fallback strategy
+            try:
+                font = QFont(self.keyboard_font_family, adjusted_font_size)
+                # Use PreferMatch instead of NoFontMerging to allow some fallback
+                font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+                font.setBold(True)
+                
+                # Apply the font to the button
+                btn.setFont(font)
+            except Exception as font_error:
+                print(f"Error setting font for button: {font_error}")
+                # Use a system font as fallback
+                fallback_font = QFont("Arial", 12)
+                btn.setFont(fallback_font)
+            
+            # Set text after font is configured
+            try:
+                btn.setText(text)
+            except Exception as text_error:
+                print(f"Error setting text '{text}' for button: {text_error}")
+                # Try with a simpler text
+                btn.setText("?")
+            
+            # Apply stylesheet for styling (but not font)
+            try:
+                btn.setStyleSheet(self.get_button_style(button_size))
+                btn.setFixedSize(button_size, button_size)
+            except Exception as style_error:
+                print(f"Error applying style to button: {style_error}")
+                # Apply minimal styling
+                btn.setFixedSize(button_size, button_size)
+            
+            # Print debug info for the first few buttons
+            if text in ['අ', 'ආ', 'ඇ']:
+                print(f"Created button with text: '{text}', font: {btn.font().family()}, size: {adjusted_font_size}")
+            
+            return btn
+        except Exception as e:
+            print(f"Error creating button with text '{text}': {e}")
+            # Create a fallback button with minimal styling and a system font
+            try:
+                fallback_btn = QPushButton("?")  # Use ? as fallback text
+                fallback_font = QFont("Arial", 12)
+                fallback_btn.setFont(fallback_font)
+                fallback_btn.setFixedSize(button_size, button_size)
+                return fallback_btn
+            except Exception as fallback_error:
+                print(f"Error creating fallback button: {fallback_error}")
+                # Last resort - create an empty button
+                empty_btn = QPushButton()
+                empty_btn.setFixedSize(button_size, button_size)
+                return empty_btn
+        
     def create_keyboard(self):
         # Create main layout
         main_layout = QVBoxLayout(self)
@@ -371,17 +478,13 @@ class SinhalaKeyboard(QFrame):
         # Set button size based on font size with 20% increase
         button_size = max(55, int((self.font_size + 20) * 1.2))  # Scale button size with font size and add 20%
         
-        print(f"Creating keyboard with button size: {button_size}px")
+        print(f"Creating keyboard with button size: {button_size}px, font: {self.keyboard_font_family}")
 
         # Row 0: Vowels
         vowels = self.keys['vowels']
         for col, key in enumerate(vowels):
-            # Create button
-            btn = QPushButton(key)
-            
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(button_size))
-            btn.setFixedSize(button_size, button_size)
+            # Create button with proper font settings
+            btn = self.create_button(key, button_size)
             
             # Print debug info for first button
             if col == 0:
@@ -399,12 +502,8 @@ class SinhalaKeyboard(QFrame):
         # Row 1: Vowel modifiers and first consonants
         row1_keys = ['ු', 'ූ', 'ෙ', 'ේ', 'ෛ', 'ො', 'ෝ', 'ෞ', 'ක', 'ඛ', 'ග', 'ඝ', 'ඟ', 'ච', 'ඡ']
         for col, key in enumerate(row1_keys):
-            # Create button
-            btn = QPushButton(key)
-            
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(button_size))
-            btn.setFixedSize(button_size, button_size)
+            # Create button with proper font settings
+            btn = self.create_button(key, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -413,12 +512,8 @@ class SinhalaKeyboard(QFrame):
         # Row 2: More consonants
         row2_keys = ['ජ', 'ඣ', 'ඤ', 'ඥ', 'ට', 'ඨ', 'ඩ', 'ඪ', 'ණ', 'ඬ', 'ත', 'ථ', 'ද', 'ධ', 'න']
         for col, key in enumerate(row2_keys):
-            # Create button
-            btn = QPushButton(key)
-            
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(button_size))
-            btn.setFixedSize(button_size, button_size)
+            # Create button with proper font settings
+            btn = self.create_button(key, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -427,12 +522,8 @@ class SinhalaKeyboard(QFrame):
         # Row 3: More consonants
         row3_keys = ['ඳ', 'ප', 'ඵ', 'බ', 'භ', 'ම', 'ඹ', 'ය', 'ර', 'ල', 'ව', 'ශ', 'ෂ', 'ස', 'හ']
         for col, key in enumerate(row3_keys):
-            # Create button
-            btn = QPushButton(key)
-            
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(button_size))
-            btn.setFixedSize(button_size, button_size)
+            # Create button with proper font settings
+            btn = self.create_button(key, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
@@ -441,31 +532,52 @@ class SinhalaKeyboard(QFrame):
         # Row 4: Remaining consonants and special characters
         row4_keys = ['ළ', 'ෆ', 'ං', 'ඃ', '්', 'ා', 'ැ', 'ෑ', 'ි', 'ී']
         for col, key in enumerate(row4_keys):
-            # Create button
-            btn = QPushButton(key)
-            
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(button_size))
-            btn.setFixedSize(button_size, button_size)
+            # Create button with proper font settings
+            btn = self.create_button(key, button_size)
             
             key_fixed = key
             btn.clicked.connect(lambda checked=False, k=key_fixed, b=btn: self.on_key_clicked(k, b))
             grid_layout.addWidget(btn, 4, col)
 
-        # Add Space button
-        space_btn = QPushButton("Space")
-        space_btn.setStyleSheet(self.get_space_button_style())
-        space_btn.setFixedHeight(button_size)
-        space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))
+        try:
+            # Add Space button with proper font settings
+            space_btn = QPushButton("Space")
+            
+            # Use a system font for Latin text buttons to avoid rendering issues
+            # These buttons don't need Sinhala font support
+            font = QFont("Arial", self.font_size)
+            font.setBold(True)
+            space_btn.setFont(font)
+            space_btn.setStyleSheet(self.get_space_button_style())
+            space_btn.setFixedHeight(button_size)
+            space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))
 
-        # Add Space button to span 3 columns
-        grid_layout.addWidget(space_btn, 4, 10, 1, 3)
+            # Add Space button to span 3 columns
+            grid_layout.addWidget(space_btn, 4, 10, 1, 3)
 
-        # Add Backspace button
-        backspace_btn = QPushButton("Backspace")
-        backspace_btn.setStyleSheet(self.get_backspace_button_style())
-        backspace_btn.setFixedHeight(button_size)
-        backspace_btn.clicked.connect(lambda checked=False, b=backspace_btn: self.on_key_clicked("Backspace", b))
+            # Add Backspace button with proper font settings
+            backspace_btn = QPushButton("Backspace")
+            backspace_btn.setFont(font)  # Reuse the same font
+            backspace_btn.setStyleSheet(self.get_backspace_button_style())
+            backspace_btn.setFixedHeight(button_size)
+            backspace_btn.clicked.connect(lambda checked=False, b=backspace_btn: self.on_key_clicked("Backspace", b))
+            
+            # Print debug info
+            print(f"Created Space/Backspace buttons with font: {font.family()}")
+        except Exception as e:
+            print(f"Error creating Space/Backspace buttons: {e}")
+            # Create fallback buttons with system font
+            space_btn = QPushButton("Space")
+            fallback_font = QFont("Arial", 12)
+            space_btn.setFont(fallback_font)
+            space_btn.setFixedHeight(button_size)
+            space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))
+            grid_layout.addWidget(space_btn, 4, 10, 1, 3)
+            
+            backspace_btn = QPushButton("Backspace")
+            backspace_btn.setFont(fallback_font)
+            backspace_btn.setFixedHeight(button_size)
+            backspace_btn.clicked.connect(lambda checked=False, b=backspace_btn: self.on_key_clicked("Backspace", b))
 
         # Add Backspace button to span 2 columns
         grid_layout.addWidget(backspace_btn, 4, 13, 1, 2)
@@ -493,33 +605,44 @@ class SinhalaKeyboard(QFrame):
 
     def on_key_clicked(self, key, button):
         """Handle key clicks with visual feedback"""
-        # Check if the key is a consonant that can have vowel modifiers
-        if key in self.consonants:
-            # Show vowel modifier options
-            self.show_vowel_modifiers(key)
-        elif key in self.keys.get('modifiers', []):
-            # For modifiers, we'll just emit them directly
-            # In a real implementation, you might want to combine with the last consonant
-            self.keyPressed.emit(key)
-        else:
-            # For non-consonants, just emit the key press signal
+        try:
+            # Check if the key is a consonant that can have vowel modifiers
+            if key in self.consonants:
+                # Show vowel modifier options
+                self.show_vowel_modifiers(key)
+            elif key in self.keys.get('modifiers', []):
+                # For modifiers, we'll just emit them directly
+                # In a real implementation, you might want to combine with the last consonant
+                self.keyPressed.emit(key)
+            else:
+                # For non-consonants, just emit the key press signal
+                self.keyPressed.emit(key)
+        except Exception as e:
+            print(f"Error in on_key_clicked for key '{key}': {e}")
+            # In case of error, just emit the key directly
             self.keyPressed.emit(key)
 
     def show_vowel_group(self, vowel, button):
         """Show a popup with vowel variants"""
-        if vowel not in self.vowel_groups:
-            # If no group defined, just emit the key
+        try:
+            if vowel not in self.vowel_groups:
+                # If no group defined, just emit the key
+                self.keyPressed.emit(vowel)
+                return
+    
+            # Calculate current button size based on keyboard height
+            height_factor = self.height() / self.default_height
+            current_button_size = max(46, int((self.font_size + 20) * height_factor))
+    
+            # Create a dialog to show vowel variants
+            dialog = QDialog(self.parent())
+            dialog.setWindowTitle(f"Vowel Variants")
+            dialog.setModal(False)  # Make it non-modal
+        except Exception as e:
+            print(f"Error initializing vowel group dialog: {e}")
+            # Just emit the vowel without showing the dialog
             self.keyPressed.emit(vowel)
             return
-
-        # Calculate current button size based on keyboard height
-        height_factor = self.height() / self.default_height
-        current_button_size = max(46, int((self.font_size + 20) * height_factor))
-
-        # Create a dialog to show vowel variants
-        dialog = QDialog(self.parent())
-        dialog.setWindowTitle(f"Vowel Variants")
-        dialog.setModal(False)  # Make it non-modal
 
         # Enable closing when clicking outside the dialog
         dialog.setAttribute(Qt.WA_DeleteOnClose)
@@ -586,16 +709,24 @@ class SinhalaKeyboard(QFrame):
 
         # Add buttons for each variant
         variants = self.vowel_groups[vowel]
+        
+        # Create font with better fallback strategy
+        adjusted_font_size = max(self.font_size - 4, 12)
+        font = QFont(self.keyboard_font_family, adjusted_font_size)
+        # Use PreferMatch instead of NoFontMerging to allow some fallback
+        font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+        font.setBold(True)
+        
         for i, variant in enumerate(variants):
             btn = QPushButton(variant)
             
             # Use the same button size as the main keyboard
             btn.setFixedSize(current_button_size, current_button_size)
             
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(current_button_size))
+            # Set font directly with better fallback strategy
+            btn.setFont(font)
             
-            # Apply theme-specific styling
+            # Apply theme-specific styling (without font settings)
             if self.dark_mode:
                 btn.setStyleSheet("""
                     QPushButton {
@@ -643,28 +774,39 @@ class SinhalaKeyboard(QFrame):
         dialog.setMinimumWidth(250)
         dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)  # Removed Qt.Popup flag
 
-        # Position the dialog near the button
-        button_pos = button.mapToGlobal(button.rect().topLeft())
-        dialog.move(button_pos.x(), button_pos.y() - 80)
-        
-        # Make sure the dialog is visible on the current screen
-        screen_geometry = self.screen().geometry()
-        dialog_geometry = dialog.geometry()
-        
-        # Adjust if the dialog is outside the screen
-        if not screen_geometry.contains(dialog_geometry):
-            # If outside screen, reposition to be visible
-            if dialog_geometry.right() > screen_geometry.right():
-                dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
-            if dialog_geometry.bottom() > screen_geometry.bottom():
-                dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
-            if dialog_geometry.left() < screen_geometry.left():
-                dialog.move(screen_geometry.left(), dialog_geometry.y())
-            if dialog_geometry.top() < screen_geometry.top():
-                dialog.move(dialog_geometry.x(), screen_geometry.top())
-
-        # Show the dialog
-        dialog.exec_()
+        try:
+            # Position the dialog near the button
+            button_pos = button.mapToGlobal(button.rect().topLeft())
+            dialog.move(button_pos.x(), button_pos.y() - 80)
+            
+            # Make sure the dialog is visible on the current screen
+            screen = self.screen()
+            if screen:
+                screen_geometry = screen.geometry()
+                dialog_geometry = dialog.geometry()
+                
+                # Adjust if the dialog is outside the screen
+                if not screen_geometry.contains(dialog_geometry):
+                    # If outside screen, reposition to be visible
+                    if dialog_geometry.right() > screen_geometry.right():
+                        dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
+                    if dialog_geometry.bottom() > screen_geometry.bottom():
+                        dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
+                    if dialog_geometry.left() < screen_geometry.left():
+                        dialog.move(screen_geometry.left(), dialog_geometry.y())
+                    if dialog_geometry.top() < screen_geometry.top():
+                        dialog.move(dialog_geometry.x(), screen_geometry.top())
+            else:
+                # If we can't get screen info, just center the dialog on the keyboard
+                keyboard_center = self.mapToGlobal(self.rect().center())
+                dialog.move(keyboard_center.x() - dialog.width() // 2, keyboard_center.y() - dialog.height() // 2)
+                
+            # Show the dialog
+            dialog.exec_()
+        except Exception as e:
+            print(f"Error showing vowel group dialog: {e}")
+            # Just emit the vowel without showing the dialog
+            self.keyPressed.emit(vowel)
 
     def select_vowel_variant(self, dialog, vowel):
         """Handle selection of a vowel variant"""
@@ -676,14 +818,20 @@ class SinhalaKeyboard(QFrame):
 
     def show_vowel_modifiers(self, consonant):
         """Show a dialog with vowel modifier options for the selected consonant"""
-        # Calculate current button size based on keyboard height
-        height_factor = self.height() / self.default_height
-        current_button_size = max(46, int((self.font_size + 20) * height_factor))
-        
-        # Create a dialog to show vowel modifiers
-        dialog = QDialog(self.parent())
-        dialog.setWindowTitle(f"Vowel Modifiers for {consonant}")
-        dialog.setModal(False)  # Changed to non-modal so it can be closed by clicking outside
+        try:
+            # Calculate current button size based on keyboard height
+            height_factor = self.height() / self.default_height
+            current_button_size = max(46, int((self.font_size + 20) * height_factor))
+            
+            # Create a dialog to show vowel modifiers
+            dialog = QDialog(self.parent())
+            dialog.setWindowTitle(f"Vowel Modifiers for {consonant}")
+            dialog.setModal(False)  # Changed to non-modal so it can be closed by clicking outside
+        except Exception as e:
+            print(f"Error initializing vowel modifiers dialog: {e}")
+            # Just emit the consonant without showing the dialog
+            self.keyPressed.emit(consonant)
+            return
 
         # Enable closing when clicking outside the dialog
         dialog.setAttribute(Qt.WA_DeleteOnClose)
@@ -758,10 +906,15 @@ class SinhalaKeyboard(QFrame):
         # Use the same button size as the main keyboard
         btn.setFixedSize(current_button_size, current_button_size)
         
-        # Apply stylesheet which includes font settings
-        btn.setStyleSheet(self.get_button_style(current_button_size))
+        # Set font directly with better fallback strategy
+        adjusted_font_size = max(self.font_size - 4, 12)
+        font = QFont(self.keyboard_font_family, adjusted_font_size)
+        # Use PreferMatch instead of NoFontMerging to allow some fallback
+        font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
+        font.setBold(True)
+        btn.setFont(font)
         
-        # Apply theme-specific styling
+        # Apply theme-specific styling (without font settings)
         if self.dark_mode:
             btn.setStyleSheet("""
                 QPushButton {
@@ -817,10 +970,11 @@ class SinhalaKeyboard(QFrame):
             # Use the same button size as the main keyboard and other buttons in this dialog
             btn.setFixedSize(current_button_size, current_button_size)
             
-            # Apply stylesheet which includes font settings
-            btn.setStyleSheet(self.get_button_style(current_button_size))
+            # Set font directly with better fallback strategy
+            # Reuse the same font as the base consonant button
+            btn.setFont(font)
             
-            # Apply theme-specific styling
+            # Apply theme-specific styling (without font settings)
             if self.dark_mode:
                 btn.setStyleSheet("""
                     QPushButton {
@@ -874,33 +1028,44 @@ class SinhalaKeyboard(QFrame):
         dialog.setMinimumWidth(300)
         dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)  # Removed Qt.Popup flag
 
-        # Position the dialog near the cursor
-        cursor_pos = QCursor.pos()
-        dialog.move(cursor_pos.x() - 150, cursor_pos.y() - 150)
-        
-        # If we can't get cursor position, try to position relative to the keyboard
-        if cursor_pos.isNull():
-            keyboard_pos = self.mapToGlobal(self.rect().topLeft())
-            dialog.move(keyboard_pos.x() + 100, keyboard_pos.y() - 200)
+        try:
+            # Position the dialog near the cursor
+            cursor_pos = QCursor.pos()
+            dialog.move(cursor_pos.x() - 150, cursor_pos.y() - 150)
             
-        # Make sure the dialog is visible on the current screen
-        screen_geometry = self.screen().geometry()
-        dialog_geometry = dialog.geometry()
-        
-        # Adjust if the dialog is outside the screen
-        if not screen_geometry.contains(dialog_geometry):
-            # If outside screen, reposition to be visible
-            if dialog_geometry.right() > screen_geometry.right():
-                dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
-            if dialog_geometry.bottom() > screen_geometry.bottom():
-                dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
-            if dialog_geometry.left() < screen_geometry.left():
-                dialog.move(screen_geometry.left(), dialog_geometry.y())
-            if dialog_geometry.top() < screen_geometry.top():
-                dialog.move(dialog_geometry.x(), screen_geometry.top())
-
-        # Show the dialog
-        dialog.exec_()
+            # If we can't get cursor position, try to position relative to the keyboard
+            if cursor_pos.isNull():
+                keyboard_pos = self.mapToGlobal(self.rect().topLeft())
+                dialog.move(keyboard_pos.x() + 100, keyboard_pos.y() - 200)
+                
+            # Make sure the dialog is visible on the current screen
+            screen = self.screen()
+            if screen:
+                screen_geometry = screen.geometry()
+                dialog_geometry = dialog.geometry()
+                
+                # Adjust if the dialog is outside the screen
+                if not screen_geometry.contains(dialog_geometry):
+                    # If outside screen, reposition to be visible
+                    if dialog_geometry.right() > screen_geometry.right():
+                        dialog.move(screen_geometry.right() - dialog_geometry.width(), dialog_geometry.y())
+                    if dialog_geometry.bottom() > screen_geometry.bottom():
+                        dialog.move(dialog_geometry.x(), screen_geometry.bottom() - dialog_geometry.height())
+                    if dialog_geometry.left() < screen_geometry.left():
+                        dialog.move(screen_geometry.left(), dialog_geometry.y())
+                    if dialog_geometry.top() < screen_geometry.top():
+                        dialog.move(dialog_geometry.x(), screen_geometry.top())
+            else:
+                # If we can't get screen info, just center the dialog on the keyboard
+                keyboard_center = self.mapToGlobal(self.rect().center())
+                dialog.move(keyboard_center.x() - dialog.width() // 2, keyboard_center.y() - dialog.height() // 2)
+                
+            # Show the dialog
+            dialog.exec_()
+        except Exception as e:
+            print(f"Error showing vowel modifiers dialog: {e}")
+            # Just emit the consonant without showing the dialog
+            self.keyPressed.emit(consonant)
 
     def select_consonant_with_modifier(self, dialog, consonant, modifier):
         """Handle selection of a consonant with a modifier"""
@@ -919,70 +1084,216 @@ class SinhalaKeyboard(QFrame):
         
     # --- Resize handling methods ---
     
+    # Track resize state to prevent loops
+    _last_resize_time = 0
+    _resize_count = 0
+    _last_emitted_height = 0
+    
     def resizeEvent(self, event):
         """Handle resize events to update button sizes"""
-        super().resizeEvent(event)
-        
-        # Only update if not in the middle of a resize operation
-        if not self.resize_in_progress and event.size().height() != event.oldSize().height():
-            self.update_buttons()
-            # Emit signal with new height
-            self.keyboardResized.emit(self.height())
+        try:
+            super().resizeEvent(event)
+            
+            # Track resize frequency to detect and prevent loops
+            import time
+            current_time = time.time()
+            time_since_last = current_time - self._last_resize_time
+            self._last_resize_time = current_time
+            
+            # Increment resize counter
+            if time_since_last < 0.5:  # If resizes are happening rapidly
+                self._resize_count += 1
+            else:
+                # Reset counter if enough time has passed
+                self._resize_count = 0
+                
+            # Detect resize loops and break them
+            if self._resize_count > 5:
+                print(f"WARNING: Detected resize loop! Count: {self._resize_count}, Time: {time_since_last:.3f}s")
+                # Skip this resize to break the loop
+                self._resize_count = 0
+                return
+                
+            # Only update if not in the middle of a resize operation
+            if not self.resize_in_progress and event.size().height() != event.oldSize().height():
+                # Get current height with error handling
+                try:
+                    current_height = self.height()
+                    
+                    # Skip if height is invalid or unchanged
+                    if current_height <= 0:
+                        print(f"Skipping invalid height: {current_height}")
+                        return
+                        
+                    # Skip if this is the same height we just emitted (prevent loops)
+                    if abs(current_height - self._last_emitted_height) < 5:
+                        print(f"Skipping duplicate resize: {current_height} vs {self._last_emitted_height}")
+                        return
+                        
+                    # Update buttons and emit signal
+                    self.update_buttons()
+                    
+                    # Store the height we're about to emit
+                    self._last_emitted_height = current_height
+                    
+                    # Emit signal with new height
+                    print(f"Emitting resize signal with height: {current_height}")
+                    self.keyboardResized.emit(current_height)
+                    
+                except Exception as height_error:
+                    print(f"Error getting height in resizeEvent: {height_error}")
+        except Exception as e:
+            print(f"Error in resizeEvent: {e}")
+            # Try to recover by forcing a button update
+            try:
+                self.update_buttons()
+            except:
+                pass
             
     def mousePressEvent(self, event):
         """Handle mouse press events for resizing"""
-        super().mousePressEvent(event)
-        
-        # Check if mouse is in the resize area (top 10 pixels or bottom 10 pixels)
-        if event.position().y() < 10:  # Top edge for resizing down
-            self.resize_in_progress = True
-            self.resize_direction = "top"
-            self.setCursor(Qt.SizeVerCursor)
-            self.initial_mouse_pos = event.position().y()
-            self.initial_height = self.height()
-        elif event.position().y() > self.height() - 10:  # Bottom edge for resizing up
-            self.resize_in_progress = True
-            self.resize_direction = "bottom"
-            self.setCursor(Qt.SizeVerCursor)
-            self.initial_mouse_pos = event.position().y()
-            self.initial_height = self.height()
+        try:
+            super().mousePressEvent(event)
+            
+            # Check if mouse is in the resize area (top 10 pixels or bottom 10 pixels)
+            if event.position().y() < 10:  # Top edge for resizing down
+                self.resize_in_progress = True
+                self.resize_direction = "top"
+                self.setCursor(Qt.SizeVerCursor)
+                self.initial_mouse_pos = event.position().y()
+                self.initial_height = self.height()
+            elif event.position().y() > self.height() - 10:  # Bottom edge for resizing up
+                self.resize_in_progress = True
+                self.resize_direction = "bottom"
+                self.setCursor(Qt.SizeVerCursor)
+                self.initial_mouse_pos = event.position().y()
+                self.initial_height = self.height()
+        except Exception as e:
+            print(f"Error in mousePressEvent: {e}")
             
     def mouseMoveEvent(self, event):
         """Handle mouse move events for resizing"""
-        super().mouseMoveEvent(event)
-        
-        # Show resize cursor when hovering over the resize areas
-        if not self.resize_in_progress:
-            if event.position().y() < 10 or event.position().y() > self.height() - 10:
-                self.setCursor(Qt.SizeVerCursor)
-            else:
-                self.setCursor(Qt.ArrowCursor)
+        try:
+            super().mouseMoveEvent(event)
             
-        # Perform resize if in progress
-        if self.resize_in_progress:
-            # Calculate new height based on resize direction
-            delta = event.position().y() - self.initial_mouse_pos
-            
-            if self.resize_direction == "top":
-                # When dragging from top, invert the delta (drag down = smaller)
-                new_height = max(self.minimumHeight(), self.initial_height - delta)
-            else:  # bottom
-                new_height = max(self.minimumHeight(), self.initial_height + delta)
-            
-            # Resize the keyboard
-            self.setFixedHeight(new_height)
-            
-            # Update buttons to match new size
+            # Show resize cursor when hovering over the resize areas
+            if not self.resize_in_progress:
+                if event.position().y() < 10 or event.position().y() > self.height() - 10:
+                    self.setCursor(Qt.SizeVerCursor)
+                else:
+                    self.setCursor(Qt.ArrowCursor)
+                
+            # Perform resize if in progress
+            if self.resize_in_progress:
+                # Calculate new height based on resize direction
+                delta = event.position().y() - self.initial_mouse_pos
+                
+                if self.resize_direction == "top":
+                    # When dragging from top, invert the delta (drag down = smaller)
+                    # Allow smaller sizes but respect minimum height
+                    new_height = max(self.minimumHeight(), self.initial_height - delta)
+                else:  # bottom
+                    # Allow smaller sizes but respect minimum height
+                    new_height = max(self.minimumHeight(), self.initial_height + delta)
+                
+                # Add a reasonable maximum height limit (80% of screen height if available)
+                try:
+                    screen = self.screen()
+                    if screen:
+                        screen_height = screen.availableGeometry().height()
+                        max_height = int(screen_height * 0.8)
+                        new_height = min(new_height, max_height)
+                except Exception as screen_error:
+                    print(f"Error getting screen info: {screen_error}")
+                    # Fallback to a reasonable maximum if screen info not available
+                    new_height = min(new_height, 800)
+                
+                # Prevent excessive resizing by limiting the rate of change
+                # Only resize if height changed by at least 10 pixels (increased threshold)
+                if abs(new_height - self.height()) >= 10:
+                    # Track time between resizes to throttle
+                    import time
+                    current_time = time.time()
+                    
+                    # Only allow resizes at most every 100ms during drag
+                    if not hasattr(self, '_last_drag_resize_time') or (current_time - getattr(self, '_last_drag_resize_time', 0)) > 0.1:
+                        # Store the time
+                        self._last_drag_resize_time = current_time
+                        
+                        # Use resize instead of setFixedHeight to avoid constraints
+                        self.resize(self.width(), new_height)
+                        
+                        # Update buttons to match new size
+                        self.update_buttons()
+                        
+                        # Store the height we're about to emit
+                        self._last_emitted_height = new_height
+                        
+                        # Explicitly emit the resize signal to ensure parent containers update
+                        print(f"Emitting resize from mouseMoveEvent: height={new_height}")
+                        self.keyboardResized.emit(new_height)
+                        
+                        # Print debug info
+                        print(f"Keyboard resized: direction={self.resize_direction}, delta={delta}, new_height={new_height}")
+                
+                # Accept the event to prevent it from being propagated
+                event.accept()
+        except Exception as e:
+            print(f"Error in mouseMoveEvent: {e}")
+            # Reset resize state to prevent getting stuck
+            self.resize_in_progress = False
+            self.setCursor(Qt.ArrowCursor)
             self.update_buttons()
             
     def mouseReleaseEvent(self, event):
         """Handle mouse release events for resizing"""
-        super().mouseReleaseEvent(event)
-        
-        # End resize operation
-        if self.resize_in_progress:
+        try:
+            super().mouseReleaseEvent(event)
+            
+            # End resize operation
+            if self.resize_in_progress:
+                # Get current height with error handling
+                try:
+                    current_height = self.height()
+                    
+                    # Only emit if height is valid and different from last emitted
+                    if current_height > 0 and abs(current_height - self._last_emitted_height) >= 5:
+                        # Store the height we're about to emit
+                        self._last_emitted_height = current_height
+                        
+                        # Emit final resize signal to ensure parent containers update
+                        print(f"Emitting final resize signal: height={current_height}")
+                        self.keyboardResized.emit(current_height)
+                        print(f"Resize completed. Final height: {current_height}")
+                    else:
+                        print(f"Skipping final resize signal (unchanged or invalid): {current_height}")
+                except Exception as height_error:
+                    print(f"Error getting final height: {height_error}")
+                
+                # Reset resize state
+                self.resize_in_progress = False
+                self.resize_direction = None
+                self.initial_mouse_pos = None
+                self.initial_height = None
+                
+                # Reset resize counters
+                self._resize_count = 0
+                
+                # Reset cursor
+                self.setCursor(Qt.ArrowCursor)
+                
+                # Force a final update of buttons
+                self.update_buttons()
+                
+                # Accept the event
+                event.accept()
+        except Exception as e:
+            print(f"Error in mouseReleaseEvent: {e}")
+            # Ensure resize state is reset even on error
             self.resize_in_progress = False
             self.resize_direction = None
+            self._resize_count = 0
+            self.setCursor(Qt.ArrowCursor)
             self.setCursor(Qt.ArrowCursor)
             
             # Emit signal with new height

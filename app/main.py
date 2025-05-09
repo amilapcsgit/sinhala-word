@@ -1,4 +1,4 @@
-# Sinhala Word Processor — PySide6 (v3.3 - Enhanced)
+# Sinhala Word Processor — PySide6 (v5.3 - Enhanced)
 """
 A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent UI:
 
@@ -95,7 +95,7 @@ def load_sinhala_fonts():
     """Load Sinhala fonts from the fonts directory."""
     global FONTS_DIR
     font_families = []
-    
+
     # Check if fonts directory exists
     if not os.path.exists(FONTS_DIR):
         logging.warning(f"Fonts directory not found at {FONTS_DIR}")
@@ -104,43 +104,36 @@ def load_sinhala_fonts():
         if os.path.exists(alt_fonts_dir):
             logging.info(f"Using alternate fonts directory: {alt_fonts_dir}")
             FONTS_DIR = alt_fonts_dir
-    
+
     # Load fonts from directory
     if os.path.exists(FONTS_DIR):
         logging.info(f"Loading fonts from: {FONTS_DIR}")
-        
-        # Load only fonts from our fonts directory
         for font_file in os.listdir(FONTS_DIR):
             if font_file.lower().endswith(('.ttf', '.otf')):
                 font_path = os.path.join(FONTS_DIR, font_file)
-                try:
-                    font_id = QFontDatabase.addApplicationFont(font_path)
-                    if font_id != -1:
-                        families = QFontDatabase.applicationFontFamilies(font_id)
-                        font_families.extend(families)
-                        logging.info(f"Loaded font: {font_file} - Families: {', '.join(families)}")
-                    else:
-                        logging.error(f"Failed to load font: {font_file}")
-                except Exception as e:
-                    logging.error(f"Error loading font {font_file}: {e}")
+                font_id = QFontDatabase.addApplicationFont(font_path)
+                if font_id != -1:
+                    family = QFontDatabase.applicationFontFamilies(font_id)
+                    if family:
+                        font_families.append(family[0])
+                        logging.info(f"Loaded font: {family[0]} from {font_file}")
+                else:
+                    logging.error(f"Failed to load font: {font_file}")
     else:
         logging.error(f"Fonts directory not found: {FONTS_DIR}")
-    
+
     # Check for system Sinhala fonts as fallbacks
     system_sinhala_fonts = ["Iskoola Pota", "Nirmala UI"]
     for font_name in system_sinhala_fonts:
         if QFontDatabase.hasFamily(font_name) and font_name not in font_families:
             font_families.append(font_name)
             logging.info(f"Found system Sinhala font: {font_name}")
-    
-    # Only log the Sinhala fonts we found, not all system fonts
-    logging.info(f"Loaded Sinhala font families: {', '.join(font_families)}")
-    
+
     # If no fonts were found, add a default system font
     if not font_families:
         font_families.append("Arial")
         logging.warning("No Sinhala fonts found, using Arial as fallback")
-    
+
     return font_families
 
 
@@ -326,75 +319,50 @@ class SinhalaWordApp(QMainWindow):
         # Initialize with dark mode based on current theme and default font size
         is_dark_mode = self.theme_manager.is_dark_mode()
         
-        # Use a slightly smaller font size for better compatibility
-        keyboard_font_size = self.preferences.get("keyboard_font_size", 26)  # Default to 26 if not set
-        # Limit to a reasonable size to avoid rendering issues
-        keyboard_font_size = min(keyboard_font_size, 30)
+        # Use a larger default font size for better visibility
+        keyboard_font_size = self.preferences.get("keyboard_font_size", 60)  # Default to 60 if not set
         
         # Create the keyboard with the current theme and font size
         # First, ensure we have a valid font size
-        if keyboard_font_size <= 0 or keyboard_font_size > 100:
-            keyboard_font_size = 26  # Reset to default if invalid
+        if keyboard_font_size <= 0 or keyboard_font_size > 200:
+            keyboard_font_size = 60  # Reset to default if invalid
+            self.preferences["keyboard_font_size"] = keyboard_font_size  # Update preferences
             logging.warning(f"Invalid keyboard font size detected, reset to {keyboard_font_size}")
-        
-        # CRITICAL: Set a fixed initial height for the keyboard to prevent resize loops
-        # This will be adjusted later by the user if needed
-        # Use a conservative initial height (264 is the default height)
-        initial_keyboard_height = 264
-        logging.info(f"Setting initial keyboard height to {initial_keyboard_height}")
-        
-        # Create the keyboard with multiple fallback options
+
+        # Create the Sinhala keyboard instance
         try:
-            # Create the keyboard with error handling - use a more conservative font size
-            safe_font_size = min(keyboard_font_size, 26)  # Limit to 26 for better compatibility
+            # Create the keyboard directly with the parent
+            self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode, font_size=keyboard_font_size)
+
+            # Connect the key press signal
+            self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
+
+            # Calculate appropriate height based on font size
+            base_height = 600  # Increased base height for better visibility
+            base_font_size = 60  # Increased base font size
+            calculated_height = max(400, int((keyboard_font_size / base_font_size) * base_height))
             
-            # Create keyboard with no parent first
-            self.keyboard_area = SinhalaKeyboard(parent=None, dark_mode=is_dark_mode, font_size=safe_font_size)
+            # Ensure the keyboard has a reasonable size before we start
+            # Use the calculated height based on font size, with a minimum of 400px
+            self.keyboard_area.resize(self.width(), calculated_height)
             
-            # Set a fixed initial size before adding to parent
-            # This is critical to prevent resize loops
-            self.keyboard_area.resize(800, initial_keyboard_height)
+            # Store the calculated height in preferences
+            self.preferences["keyboard_height"] = calculated_height
             
-            # Only set parent after successful creation and sizing
-            self.keyboard_area.setParent(self)
-            
-            # Disable resize events temporarily
-            self.keyboard_area._resize_count = 999  # This will cause resize events to be ignored initially
-            
-            # Connect the key press signal with error handling
-            try:
-                self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
-            except Exception as signal_error:
-                logging.error(f"Error connecting keyboard signal: {signal_error}")
-            
+            # Force an update of the buttons after initialization
+            if hasattr(self.keyboard_area, 'update_buttons'):
+                # Give the layout a chance to initialize first
+                QTimer.singleShot(100, self.keyboard_area.update_buttons)
+                
             # Log successful keyboard creation
-            logging.info(f"Created Sinhala keyboard with font size: {safe_font_size}, initial height: {initial_keyboard_height}")
-            
-            # Reset resize counter after a delay
-            QTimer.singleShot(1000, lambda: setattr(self.keyboard_area, '_resize_count', 0))
-            
+            logging.info(f"Created Sinhala keyboard with font size: {keyboard_font_size}")
+
         except Exception as e:
             logging.error(f"Error creating Sinhala keyboard: {e}")
-            # Create a fallback keyboard with minimal settings
-            try:
-                # Try with even smaller font size and no parent initially
-                self.keyboard_area = SinhalaKeyboard(parent=None, dark_mode=is_dark_mode, font_size=16)
-                
-                # Set a fixed size before adding to parent
-                self.keyboard_area.resize(800, 200)  # Even smaller height for fallback
-                
-                # Set parent after sizing
-                self.keyboard_area.setParent(self)
-                
-                # Connect signal
-                self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
-                logging.info("Created fallback keyboard with minimal settings")
-            except Exception as fallback_error:
-                logging.error(f"Failed to create fallback keyboard: {fallback_error}")
-                # Create an empty widget as a last resort
-                self.keyboard_area = QWidget(self)
-                self.keyboard_area.setFixedHeight(100)  # Small fixed height
-                logging.warning("Created empty widget as keyboard placeholder")
+            # Create an empty widget as a fallback
+            self.keyboard_area = QWidget(self)
+            self.keyboard_area.setFixedHeight(100)  # Small fixed height
+            logging.warning("Created empty widget as keyboard placeholder due to error")
 
         # Apply initial theme - ensure consistent application
         self.apply_theme_to_all_widgets()
@@ -413,8 +381,8 @@ class SinhalaWordApp(QMainWindow):
         # Note: The suggestion popup is not added to the layout as it's a popup widget
         logger.info("Created suggestion popup widget")
         
-        # Add editor
-        main_layout.addWidget(self.editor)
+        # Add editor with stretch factor to allow it to take most of the space
+        main_layout.addWidget(self.editor, 3)  # Higher stretch factor for editor
 
         # Add keyboard area with responsive height
         self.keyboard_container = QWidget()
@@ -451,64 +419,230 @@ class SinhalaWordApp(QMainWindow):
             keyboard_height = self.preferences.get("keyboard_height", default_keyboard_height)
             logging.info(f"No screen info available, using keyboard height: {keyboard_height}")
         
-        # Set initial height but allow for smaller sizes
-        # Use a much smaller minimum height to allow shrinking
+        # Set minimum height but allow for resizing
         self.keyboard_container.setMinimumHeight(120)
+        
+        # Create a splitter handle effect by adding a frame at the top of the keyboard container
+        splitter_handle = QFrame(self.keyboard_container)
+        splitter_handle.setFrameShape(QFrame.HLine)
+        splitter_handle.setFrameShadow(QFrame.Sunken)
+        splitter_handle.setFixedHeight(8)  # Make it a bit taller for easier grabbing
+        splitter_handle.setStyleSheet("""
+            QFrame {
+                background-color: #cccccc;
+                border: 1px solid #aaaaaa;
+                border-radius: 2px;
+            }
+            QFrame:hover {
+                background-color: #bbbbbb;
+                border: 1px solid #999999;
+            }
+        """)
+        
+        # Set cursor to indicate resizing is possible
+        splitter_handle.setCursor(Qt.SizeVerCursor)
+        
+        # Create a custom resize handle class to handle mouse events
+        class ResizeHandle(QFrame):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setMouseTracking(True)
+                self.dragging = False
+                self.drag_start_y = 0
+                self.drag_start_height = 0
+                self.setCursor(Qt.SizeVerCursor)
+                self.setMinimumHeight(8)  # Make handle easier to grab
+                self.setMaximumHeight(8)  # Keep it small but visible
+                
+                # Set a background color to make it more visible
+                self.setStyleSheet("background-color: rgba(128, 128, 128, 0.5);")
+                
+            def mousePressEvent(self, event):
+                if event.button() == Qt.LeftButton:
+                    self.dragging = True
+                    self.drag_start_y = event.globalY()
+                    self.drag_start_height = self.parent().height()
+                    event.accept()
+                else:
+                    super().mousePressEvent(event)
+                    
+            def mouseMoveEvent(self, event):
+                if self.dragging:
+                    # Find the main window
+                    app = QApplication.instance()
+                    main_window = None
+                    for widget in app.topLevelWidgets():
+                        if isinstance(widget, SinhalaWordApp):
+                            main_window = widget
+                            break
+                    
+                    if not main_window:
+                        super().mouseMoveEvent(event)
+                        return
+                    
+                    # Set the manual resize flag in the main window
+                    if hasattr(main_window, '_manual_resize'):
+                        main_window._manual_resize = True
+                        
+                    # Calculate new height
+                    delta_y = event.globalY() - self.drag_start_y
+                    new_height = max(120, self.drag_start_height - delta_y)
+                    
+                    # Resize the container directly
+                    self.parent().resize(self.parent().width(), new_height)
+                    
+                    # Update the keyboard area
+                    keyboard_area = self.parent().findChild(SinhalaKeyboard)
+                    if keyboard_area:
+                        # Calculate keyboard height (container height minus margins and handle)
+                        keyboard_height = new_height - 10
+                        keyboard_area.resize(keyboard_area.width(), keyboard_height)
+                        
+                        # Update the buttons to match the new size
+                        if hasattr(keyboard_area, 'update_buttons'):
+                            keyboard_area.update_buttons()
+                    
+                    # Update the main window's preferences directly
+                    if main_window:
+                        # Save the current height in preferences
+                        main_window.preferences["keyboard_height"] = keyboard_height
+                        
+                        # Force layout update to apply changes
+                        main_window.updateGeometry()
+                        
+                        # Log the resize for debugging
+                        logging.debug(f"Manual resize in progress: Container height={new_height}, Keyboard height={keyboard_height}")
+                    
+                    event.accept()
+                else:
+                    super().mouseMoveEvent(event)
+                    
+            def mouseReleaseEvent(self, event):
+                if event.button() == Qt.LeftButton and self.dragging:
+                    self.dragging = False
+                    
+                    # Find the main window
+                    app = QApplication.instance()
+                    main_window = None
+                    for widget in app.topLevelWidgets():
+                        if isinstance(widget, SinhalaWordApp):
+                            main_window = widget
+                            break
+                            
+                    if main_window:
+                        # Get the keyboard area
+                        keyboard_area = self.parent().findChild(SinhalaKeyboard)
+                        if keyboard_area:
+                            # Get the current container height
+                            container_height = self.parent().height()
+                            
+                            # Make sure the container height is reasonable (at least 120px)
+                            if container_height < 120:
+                                container_height = 120
+                                self.parent().resize(self.parent().width(), container_height)
+                            
+                            # Calculate keyboard height (container height minus margins and handle)
+                            keyboard_height = container_height - 10
+                            
+                            # Save the final height in preferences
+                            main_window.preferences["keyboard_height"] = keyboard_height
+                            
+                            # Set a permanent flag to prevent automatic resizing
+                            main_window._manual_resize = True
+                            
+                            # The key insight: Use the same approach as the settings dialog
+                            # Calculate a new font size based on the keyboard height
+                            # This is the key to making the resize stick
+                            current_font_size = main_window.preferences.get("keyboard_font_size", 26)
+                            
+                            # Calculate a new font size proportional to the height change
+                            # Base calculation: default height 264px corresponds to font size 26
+                            # So for every 10px of height, we change font size by about 1
+                            base_height = 264
+                            base_font_size = 26
+                            
+                            # Calculate new font size proportional to height and round to nearest integer
+                            new_font_size = max(20, min(200, round(base_font_size * keyboard_height / base_height)))
+                            
+                            # Only update if the integer value has changed
+                            if new_font_size != int(current_font_size):
+                                # Use the set_keyboard_font_size method which properly updates everything
+                                if hasattr(main_window, 'set_keyboard_font_size'):
+                                    main_window.set_keyboard_font_size(new_font_size)
+                                    logging.info(f"Updated keyboard font size to {new_font_size} based on height {keyboard_height}")
+                            else:
+                                # If we're not changing the font size, we still need to update the height
+                                # Ensure the keyboard has the correct height
+                                keyboard_area.resize(keyboard_area.width(), keyboard_height)
+                                
+                                # Update the buttons to match the new size
+                                if hasattr(keyboard_area, 'update_buttons'):
+                                    keyboard_area.update_buttons()
+                                
+                                # Save preferences immediately to disk
+                                from app import config
+                                config.save_user_preferences(main_window.preferences)
+                            
+                            # Log the resize for debugging
+                            logging.info(f"Manual resize COMPLETED: Container height={container_height}, Keyboard height={keyboard_height}")
+                        
+                    event.accept()
+                else:
+                    super().mouseReleaseEvent(event)
+        
+        # Replace the simple frame with our custom resize handle
+        splitter_handle = ResizeHandle(self.keyboard_container)
+        
+        # Set size policy to allow the container to grow and shrink
+        # Use Preferred for vertical to allow manual resizing
+        self.keyboard_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        
+        # Make sure the container can be resized
+        self.keyboard_container.setMinimumHeight(120)  # Minimum reasonable height
+        self.keyboard_container.setMaximumHeight(16777215)  # Maximum possible height (QWIDGETSIZE_MAX)
         
         # Create layout for keyboard container
         keyboard_layout = QVBoxLayout(self.keyboard_container)
         keyboard_layout.setContentsMargins(2, 2, 2, 2)
         keyboard_layout.setSpacing(2)
         
-        # Add the keyboard to the container
+        # Add the splitter handle to the top of the layout
+        keyboard_layout.addWidget(splitter_handle)
+        
+        # Add the keyboard to the container with stretch factor
         try:
-            keyboard_layout.addWidget(self.keyboard_area)
+            keyboard_layout.addWidget(self.keyboard_area, 1)  # Add with stretch factor of 1
         except Exception as e:
             logging.error(f"Error adding keyboard to layout: {e}")
             # Try to recover by recreating the keyboard area
             try:
                 self.keyboard_area = QWidget(self)
-                keyboard_layout.addWidget(self.keyboard_area)
+                keyboard_layout.addWidget(self.keyboard_area, 1)  # Add with stretch factor of 1
             except:
                 pass
         
-        # Add the container to the main layout
-        main_layout.addWidget(self.keyboard_container)
+        # Add the container to the main layout with stretch factor of 0
+        # This prevents automatic stretching and allows manual resizing
+        main_layout.addWidget(self.keyboard_container, 0)
         
         # Set initial size without restricting future resizing
         try:
             self.keyboard_container.resize(self.width(), keyboard_height + 10)
             self.keyboard_area.resize(self.width(), keyboard_height)
+            
+            # Ensure the keyboard area has the right size policy
+            if hasattr(self.keyboard_area, 'setSizePolicy'):
+                self.keyboard_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         except Exception as resize_error:
             logging.error(f"Error setting initial keyboard size: {resize_error}")
         
-        # IMPORTANT: Don't connect the resize signal immediately
-        # This prevents resize loops during initialization
-        # Instead, use a timer to connect it after the UI is stable
-        
-        # Make sure the keyboard fits within the screen first
-        # Call this after a short delay to ensure the window is fully initialized
-        QTimer.singleShot(200, self.ensure_keyboard_fits_screen)
-        
-        # Then connect the resize signal after a longer delay
-        # This is critical to prevent resize loops during initialization
-        def connect_resize_signal():
+        # Connect keyboard resize signal if it's a SinhalaKeyboard
+        if hasattr(self.keyboard_area, 'keyboardResized'):
             try:
-                logging.info("Connecting keyboard resize signal after initialization delay")
-                if hasattr(self.keyboard_area, 'keyboardResized'):
-                    # Disconnect first to avoid multiple connections
-                    try:
-                        self.keyboard_area.keyboardResized.disconnect(self.on_keyboard_resized)
-                    except:
-                        pass
-                    # Connect the signal
-                    self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
-                    logging.info("Successfully connected keyboard resize signal")
-            except Exception as signal_error:
-                logging.error(f"Error connecting keyboard resize signal: {signal_error}")
-        
-        # Connect the signal after a 500ms delay
-        QTimer.singleShot(500, connect_resize_signal)
+                # Connect the signal
+                self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
+            except Exception as e:
+                logger.error(f"Error connecting keyboard resize signal: {e}")
         
         # Show/hide keyboard container based on preferences
         if self.preferences["show_keyboard"]:
@@ -519,6 +653,10 @@ class SinhalaWordApp(QMainWindow):
         # Configure layout properties
         main_layout.setContentsMargins(0, 0, 0, 0) # Remove margins
         main_layout.setSpacing(2)  # Reduce spacing between widgets
+        
+        # Set the layout's size constraints to allow manual resizing
+        # SetNoConstraint allows widgets to be resized beyond their size hints
+        main_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
         # Set the central widget
         self.setCentralWidget(central_widget)
@@ -666,202 +804,308 @@ class SinhalaWordApp(QMainWindow):
             # Clear state on error
             self.reset_input_state()
             
-    # Track the last resize time to prevent resize loops
-    _last_resize_time = 0
-    _resize_count = 0
-    
+    # Timer for debouncing keyboard resize events
+    _keyboard_resize_timer = None
+    _pending_keyboard_height = None
+    _manual_resize = False  # Flag to indicate manual resizing
+    _in_resize = False  # Flag to prevent resize loops
+    _last_keyboard_height = None  # Store last height for comparison
+
     def on_keyboard_resized(self, new_height):
-        """Handle keyboard resize events to update the container height."""
+        """Handle keyboard resize events to update the container height (debounced)."""
         try:
-            # Add timestamp logging to detect resize loops
-            import time
-            current_time = time.time()
-            time_since_last_resize = current_time - self._last_resize_time
-            self._last_resize_time = current_time
-            
-            # Track resize count to detect loops
-            self._resize_count += 1
-            if self._resize_count > 10 and time_since_last_resize < 0.5:
-                logger.error(f"Detected resize loop! Count: {self._resize_count}, Time since last: {time_since_last_resize:.3f}s")
-                # Reset counter but skip this resize to break the loop
-                self._resize_count = 0
+            # Check if we're in a manual resize - if so, skip automatic resizing
+            if hasattr(self, '_manual_resize') and self._manual_resize:
+                logger.debug(f"Ignoring keyboard resize signal during manual resize: {new_height}")
                 return
-            
-            # Reset counter if enough time has passed
-            if time_since_last_resize > 1.0:
-                self._resize_count = 0
                 
-            # Log detailed resize information
-            logger.debug(f"Keyboard resize: new_height={new_height}, time_since_last={time_since_last_resize:.3f}s, count={self._resize_count}")
-            
-            # Validate the new height to ensure it's reasonable
-            # Only reject negative or zero heights
+            # Validate the height
             if new_height <= 0:
                 logger.warning(f"Ignoring invalid keyboard height: {new_height}")
                 return
                 
-            # Get screen height to ensure we don't exceed reasonable limits
-            screen = self.screen()
-            if screen:
-                screen_height = screen.availableGeometry().height()
-                # Limit keyboard height to 50% of screen height (reduced from 80%)
-                max_allowed_height = int(screen_height * 0.5)
-                if new_height > max_allowed_height:
-                    new_height = max_allowed_height
-                    logger.info(f"Limiting keyboard height to {new_height} (50% of screen height)")
+            # Store the pending height
+            self._pending_keyboard_height = new_height
+
+            # Initialize timer if it doesn't exist
+            if self._keyboard_resize_timer is None:
+                self._keyboard_resize_timer = QTimer(self)
+                self._keyboard_resize_timer.setSingleShot(True)
+                self._keyboard_resize_timer.timeout.connect(self._process_keyboard_resize)
+
+            # Restart the timer with a short delay (e.g., 50ms)
+            self._keyboard_resize_timer.start(50)
+
+            logger.debug(f"Keyboard resize signal received, pending height: {new_height}")
+
+        except Exception as e:
+            logger.error(f"Error in on_keyboard_resized: {e}")
+
+    # Track resize loop detection
+    _resize_count = 0
+    _last_resize_time = 0
+    
+    @Slot()
+    def request_keyboard_resize(self, new_height):
+        """Request a keyboard resize to the specified height.
+        This method can be called from the resize handle or other components.
+        """
+        if new_height <= 0:
+            logger.warning(f"Ignoring invalid keyboard height request: {new_height}")
+            return
             
-            # Check if this is a duplicate resize (same height as before)
-            if hasattr(self, '_last_keyboard_height') and self._last_keyboard_height == new_height:
-                logger.debug(f"Skipping duplicate resize to same height: {new_height}")
-                return
+        # Store the requested height and trigger the resize timer
+        self._pending_keyboard_height = new_height
+        self._keyboard_resize_timer.start()
+        
+    def apply_keyboard_height(self, new_height):
+        """Apply a keyboard height immediately without using the timer.
+        This is used for manual resizing to ensure the size is maintained.
+        """
+        if new_height <= 0:
+            logger.warning(f"Ignoring invalid keyboard height: {new_height}")
+            return
             
-            # Store the height for future comparison
-            self._last_keyboard_height = new_height
-                
-            # Don't change minimum height here - keep it at the global minimum
-            # Just resize the container to match the keyboard
+        # Set a flag to indicate this is a manual resize
+        self._manual_resize = True
+        
+        try:
+            # Calculate container height
             container_height = new_height + 10
-            
-            # Resize the container without setting minimum height
-            try:
-                self.keyboard_container.resize(self.keyboard_container.width(), container_height)
-            except Exception as resize_error:
-                logger.error(f"Error resizing keyboard container: {resize_error}")
             
             # Save the keyboard height in preferences
             self.preferences["keyboard_height"] = new_height
-            logger.info(f"Keyboard resized to height: {new_height}, container: {container_height}")
+            logger.info(f"Manually applying keyboard height: {new_height}, container: {container_height}")
+            
+            # Resize the keyboard container directly
+            if hasattr(self, 'keyboard_container') and self.keyboard_container.isVisible():
+                self.keyboard_container.resize(self.keyboard_container.width(), container_height)
+                
+                # Resize the keyboard area directly
+                if hasattr(self, 'keyboard_area'):
+                    self.keyboard_area.resize(self.keyboard_area.width(), new_height)
+                    
+                    # Update the buttons to match the new size
+                    if hasattr(self.keyboard_area, 'update_buttons'):
+                        self.keyboard_area.update_buttons()
             
             # Force layout update
-            try:
-                self.keyboard_container.updateGeometry()
-                self.updateGeometry()
-                
-                # Ensure the main window layout is updated
-                if self.centralWidget() and self.centralWidget().layout():
-                    self.centralWidget().layout().activate()
-            except Exception as layout_error:
-                logger.error(f"Error updating layout after keyboard resize: {layout_error}")
-                
+            self.updateGeometry()
+            
+            # Save preferences to ensure the size is remembered
+            config.save_user_preferences(self.preferences)
+            
         except Exception as e:
-            logger.error(f"Error in on_keyboard_resized: {e}")
+            logger.error(f"Error applying keyboard height: {e}")
+        finally:
+            # Clear the manual resize flag after a delay
+            QTimer.singleShot(500, lambda: setattr(self, '_manual_resize', False))
+        
+    def _process_keyboard_resize(self):
+        """Process the pending keyboard resize after the debounce timer times out."""
+        try:
+            # Check if we're in a manual resize - if so, skip automatic resizing
+            if hasattr(self, '_manual_resize') and self._manual_resize:
+                logger.debug("Skipping automatic resize as we're in a manual resize operation")
+                return
+                
+            # Get the pending height
+            new_height = self._pending_keyboard_height
+            self._pending_keyboard_height = None # Clear pending height
+
+            if new_height is None:
+                return # No pending resize
+                
+            # Check for resize loops
+            import time
+            current_time = time.time()
+            if current_time - self._last_resize_time < 1.0:  # Within 1 second
+                self._resize_count += 1
+                if self._resize_count > 10:
+                    logger.warning(f"Detected resize loop! Count: {self._resize_count}, Time: {current_time - self._last_resize_time:.3f}s")
+                    self._resize_count = 0  # Reset counter
+                    return  # Skip this resize to break the loop
+            else:
+                self._resize_count = 0  # Reset counter
+                
+            self._last_resize_time = current_time
+
+            logger.info(f"Processing keyboard resize to height: {new_height}")
+
+            # Validate the new height to ensure it's reasonable
+            if new_height <= 0:
+                logger.warning(f"Ignoring invalid processed keyboard height: {new_height}")
+                return
+
+            # Check if this is a duplicate resize (same height as before)
+            if hasattr(self, '_last_keyboard_height') and self._last_keyboard_height == new_height:
+                logger.debug(f"Skipping duplicate processed resize to same height: {new_height}")
+                return
+
+            # Store the height for future comparison
+            self._last_keyboard_height = new_height
+
+            # Set a flag to indicate we're in a programmatic resize
+            # This prevents resize loops when the keyboard itself is being resized
+            if hasattr(self, '_in_resize') and self._in_resize:
+                logger.debug("Skipping resize as we're already in a resize operation")
+                return
+                
+            self._in_resize = True
+
+            try:
+                # Don't change minimum height here - keep it at the global minimum
+                # Just resize the container to match the keyboard
+                container_height = new_height + 10
+    
+                # Save the keyboard height in preferences
+                self.preferences["keyboard_height"] = new_height
+                logger.info(f"Keyboard resized to height: {new_height}, container: {container_height}")
+                
+                # Resize the keyboard container
+                if hasattr(self, 'keyboard_container') and self.keyboard_container.isVisible():
+                    self.keyboard_container.resize(self.keyboard_container.width(), container_height)
+                    
+                    # Resize the keyboard area directly
+                    if hasattr(self, 'keyboard_area'):
+                        self.keyboard_area.resize(self.keyboard_area.width(), new_height)
+    
+                # Update the buttons to match the new size
+                if hasattr(self.keyboard_area, 'update_buttons'):
+                    self.keyboard_area.update_buttons()
+                    
+                # Calculate a new font size based on the keyboard height
+                # This ensures the font size is proportional to the keyboard height
+                # Base calculation: default height 264px corresponds to font size 26
+                # So for every 10px of height, we change font size by about 1
+                base_height = 264
+                base_font_size = 26
+                current_font_size = self.preferences.get("keyboard_font_size", base_font_size)
+                
+                # Calculate new font size proportional to height and round to nearest integer
+                new_font_size = max(20, min(200, round(base_font_size * new_height / base_height)))
+                
+                # Only update if the integer value has changed significantly (more than 2 points)
+                # This prevents small oscillations that can cause resize loops
+                if abs(new_font_size - current_font_size) > 2:
+                    logger.info(f"Adjusting keyboard font size from {current_font_size} to {new_font_size} based on height {new_height}")
+                    # Update the font size without triggering another resize
+                    self._manual_resize = True
+                    self.preferences["keyboard_font_size"] = new_font_size
+                    
+                    # Update the keyboard font size directly without calling set_font_size
+                    # to avoid triggering another resize
+                    if hasattr(self.keyboard_area, 'font_size'):
+                        self.keyboard_area.font_size = new_font_size
+                        
+                    # Update the buttons again with the new font size
+                    if hasattr(self.keyboard_area, 'update_buttons'):
+                        self.keyboard_area.update_buttons()
+                    
+                # Force layout update to apply changes
+                self.updateGeometry()
+            except Exception as layout_error:
+                logger.error(f"Error updating layout after processed keyboard resize: {layout_error}")
+            finally:
+                # Always clear the resize flag
+                self._in_resize = False
+
+        except Exception as e:
+            logger.error(f"Error in _process_keyboard_resize: {e}")
             # Try to recover by forcing a layout update
             try:
                 self.updateGeometry()
             except:
                 pass
-            
-    def finish_keyboard_setup(self):
-        """Complete the keyboard setup after initialization"""
-        try:
-            # This method is called after keyboard creation to complete setup
-            # It's separated to allow for better error handling
-            
-            # Add keyboard container if it doesn't exist yet
-            if not hasattr(self, 'keyboard_container'):
-                self.keyboard_container = QWidget()
-                self.keyboard_container.setMinimumHeight(120)
-                
-                # Get layout from central widget
-                if self.centralWidget() and self.centralWidget().layout():
-                    self.centralWidget().layout().addWidget(self.keyboard_container)
-            
-            # Set up keyboard container layout if needed
-            if self.keyboard_container.layout() is None:
-                keyboard_layout = QVBoxLayout(self.keyboard_container)
-                keyboard_layout.setContentsMargins(2, 2, 2, 2)
-                keyboard_layout.setSpacing(2)
-                keyboard_layout.addWidget(self.keyboard_area)
-            
-            # Connect keyboard resize signal if it's a SinhalaKeyboard
-            if hasattr(self.keyboard_area, 'keyboardResized'):
-                try:
-                    # Disconnect first to avoid multiple connections
-                    try:
-                        self.keyboard_area.keyboardResized.disconnect(self.on_keyboard_resized)
-                    except:
-                        pass
-                    # Connect the signal
-                    self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
-                except Exception as e:
-                    logger.error(f"Error connecting keyboard resize signal: {e}")
-            
-            # Show/hide based on preferences
-            if self.preferences["show_keyboard"]:
-                self.keyboard_container.show()
-                self.keyboard_area.show()
-            else:
-                self.keyboard_container.hide()
-                self.keyboard_area.hide()
-                
-            # Force layout update
-            self.keyboard_container.updateGeometry()
-            if self.centralWidget():
-                self.centralWidget().updateGeometry()
-                
-            logger.info("Keyboard setup completed successfully")
-            
-        except Exception as e:
-            logger.error(f"Error in finish_keyboard_setup: {e}")
-    
+
+
     def ensure_keyboard_fits_screen(self):
         """Ensure the keyboard size fits within the available screen space"""
         try:
+            # Check if we're in a manual resize - if so, skip automatic adjustments
+            if hasattr(self, '_manual_resize') and self._manual_resize:
+                logger.debug("Skipping keyboard size check as we're in a manual resize operation")
+                return
+                
             # Get current screen size
             screen = self.screen()
             if not screen:
                 logger.warning("Could not get screen information")
                 return
-                
+
             screen_height = screen.availableGeometry().height()
             screen_width = screen.availableGeometry().width()
             
+            # Log screen dimensions for debugging
+            logger.info(f"Screen dimensions: {screen_width}x{screen_height}")
+
             # Get current window size
             window_height = self.height()
             window_width = self.width()
-            
+
             # Get current keyboard height with error handling
             try:
+                # Get the current keyboard height
                 keyboard_height = self.keyboard_area.height()
+                
+                # If the keyboard height is valid, use it
                 if keyboard_height <= 0:
-                    logger.warning(f"Invalid keyboard height: {keyboard_height}, using default")
+                    logger.debug(f"Invalid keyboard height: {keyboard_height}, using saved preference")
                     keyboard_height = self.preferences.get("keyboard_height", 264)
             except Exception as e:
                 logger.error(f"Error getting keyboard height: {e}")
                 keyboard_height = self.preferences.get("keyboard_height", 264)
+
+            # Calculate maximum allowed keyboard height (e.g., 50% of screen height)
+            max_keyboard_height = int(screen_height * 0.50)
             
-            # Calculate maximum allowed keyboard height (25% of screen height)
-            # Reduced from 40% to 25% to prevent resize loops
-            max_keyboard_height = int(screen_height * 0.25)
-            
+            # Log the keyboard height information
+            logger.info(f"Using keyboard height: {keyboard_height} (saved: {self.preferences.get('keyboard_height', 'not set')}, max: {max_keyboard_height})")
+
             # If keyboard is too large, resize it
             if keyboard_height > max_keyboard_height:
-                logger.info(f"Adjusting keyboard height from {keyboard_height} to {max_keyboard_height} to fit screen")
+                # Only log at debug level to reduce noise during normal operation
+                logger.debug(f"Limiting keyboard height to {max_keyboard_height} (50% of screen height)")
+
+                # Check if we're already at the max height (within a small margin)
+                # to avoid triggering unnecessary resize events
+                if abs(keyboard_height - max_keyboard_height) > 5:
+                    try:
+                        # Resize keyboard without setting fixed height
+                        self.keyboard_area.resize(self.keyboard_area.width(), max_keyboard_height)
+                        self.keyboard_container.resize(self.keyboard_container.width(), max_keyboard_height + 10)
+                        
+                        # Update preferences
+                        self.preferences["keyboard_height"] = max_keyboard_height
+
+                        # Update buttons to match new size
+                        if hasattr(self.keyboard_area, 'update_buttons'):
+                             self.keyboard_area.update_buttons()
+
+                        # Force layout update to ensure changes take effect
+                        self.keyboard_area.updateGeometry()
+                        self.keyboard_container.updateGeometry()
+                    except Exception as resize_error:
+                        logger.error(f"Error resizing keyboard: {resize_error}")
+            else:
+                # If the keyboard height is valid and not too large, respect it
+                # This is important for manual resizing
+                current_container_height = self.keyboard_container.height()
+                expected_container_height = keyboard_height + 10
                 
-                try:
-                    # Resize keyboard without setting fixed height
-                    self.keyboard_area.resize(self.keyboard_area.width(), max_keyboard_height)
-                    self.keyboard_container.resize(self.keyboard_container.width(), max_keyboard_height + 10)
-                    
-                    # Update preferences
-                    self.preferences["keyboard_height"] = max_keyboard_height
-                    
-                    # Update buttons to match new size
-                    self.keyboard_area.update_buttons()
-                    
-                    # Force layout update to ensure changes take effect
-                    self.keyboard_area.updateGeometry()
-                    self.keyboard_container.updateGeometry()
-                except Exception as resize_error:
-                    logger.error(f"Error resizing keyboard: {resize_error}")
-            
+                # Only adjust if there's a significant difference
+                if abs(current_container_height - expected_container_height) > 5:
+                    logger.debug(f"Adjusting container height to match keyboard: {expected_container_height}")
+                    self.keyboard_container.resize(self.keyboard_container.width(), expected_container_height)
+
             # Now ensure the entire window fits on screen
             try:
                 self.ensure_window_fits_screen()
             except Exception as window_error:
                 logger.error(f"Error ensuring window fits screen: {window_error}")
-                
-            logger.info(f"Screen: {screen_width}x{screen_height}, Window: {window_width}x{window_height}, Keyboard height: {keyboard_height}")
+
+            # Log screen and window info at debug level to reduce noise
+            logger.debug(f"Screen: {screen_width}x{screen_height}, Window: {self.width()}x{self.height()}, Keyboard height: {self.keyboard_area.height()}")
         except Exception as e:
             logger.error(f"Error in ensure_keyboard_fits_screen: {e}")
             # Try to recover by forcing a layout update
@@ -869,7 +1113,7 @@ class SinhalaWordApp(QMainWindow):
                 self.updateGeometry()
             except:
                 pass
-            
+
     def ensure_window_fits_screen(self):
         """Ensure the entire application window fits within the screen"""
         try:
@@ -878,34 +1122,34 @@ class SinhalaWordApp(QMainWindow):
             if not screen:
                 logger.warning("Could not get screen information")
                 return
-                
+
             screen_rect = screen.availableGeometry()
             screen_height = screen_rect.height()
             screen_width = screen_rect.width()
-            
+
             # Get current window size
             window_height = self.height()
             window_width = self.width()
-            
+
             # Calculate maximum allowed window size (90% of screen)
             max_window_height = int(screen_height * 0.9)
             max_window_width = int(screen_width * 0.9)
-            
+
             # If window is too large, resize it
             resized = False
             if window_height > max_window_height:
                 logger.info(f"Adjusting window height from {window_height} to {max_window_height} to fit screen")
                 window_height = max_window_height
                 resized = True
-                
+
             if window_width > max_window_width:
                 logger.info(f"Adjusting window width from {window_width} to {max_window_width} to fit screen")
                 window_width = max_window_width
                 resized = True
-            
+
             if resized:
                 self.resize(window_width, window_height)
-                
+
             # Also ensure the window is positioned on screen
             window_pos = self.pos()
             if not screen_rect.contains(self.frameGeometry()):
@@ -914,7 +1158,7 @@ class SinhalaWordApp(QMainWindow):
                 new_y = screen_rect.center().y() - window_height // 2
                 self.move(new_x, new_y)
                 logger.info(f"Repositioned window to center of screen")
-                
+
             logger.info(f"Final window size: {self.width()}x{self.height()}")
         except Exception as e:
             logger.error(f"Error in ensure_window_fits_screen: {e}")
@@ -1037,22 +1281,38 @@ class SinhalaWordApp(QMainWindow):
     def reset_keyboard_size(self):
         """Reset the keyboard to its default size."""
         try:
-            # Default keyboard height (20% larger than original)
-            default_height = 264  # 220 * 1.2 = 264
+            # Default keyboard height
+            default_height = 600  # Increased default height for better visibility
             
-            # Resize keyboard without setting fixed height
+            # Reset minimum height constraints
+            if hasattr(self.keyboard_area, 'setMinimumHeight'):
+                self.keyboard_area.setMinimumHeight(400)  # Ensure minimum height is maintained
+            
+            # Use resize instead of setFixedHeight to allow future resizing
             self.keyboard_area.resize(self.keyboard_area.width(), default_height)
+            logger.info(f"Reset keyboard height to: {default_height}")
+                
+            # Resize the container
             self.keyboard_container.resize(self.keyboard_container.width(), default_height + 10)
             
             # Update preferences
             self.preferences["keyboard_height"] = default_height
             
             # Update buttons to match new size
-            self.keyboard_area.update_buttons()
+            if hasattr(self.keyboard_area, 'update_buttons'):
+                self.keyboard_area.update_buttons()
+                logger.info("Updated keyboard buttons")
             
             # Force layout update
             self.keyboard_container.updateGeometry()
             self.updateGeometry()
+            
+            # Reset keyboard font size to default
+            default_font_size = 60
+            if hasattr(self.keyboard_area, 'set_font_size'):
+                self.keyboard_area.set_font_size(default_font_size)
+                self.preferences["keyboard_font_size"] = default_font_size
+                logger.info(f"Reset keyboard font size to: {default_font_size}")
             
             logger.info(f"Keyboard reset to default height: {default_height}")
         except Exception as e:
@@ -1060,6 +1320,83 @@ class SinhalaWordApp(QMainWindow):
 
         # Save preferences
         config.save_user_preferences(self.preferences)
+        
+    def set_keyboard_font_size(self, size):
+        """Update the keyboard font size."""
+        try:
+            # Convert to integer for consistency
+            size = round(float(size))
+            
+            # Validate size
+            if size < 20 or size > 200:
+                logger.warning(f"Invalid keyboard font size: {size}")
+                return
+                
+            # Update preferences
+            self.preferences["keyboard_font_size"] = size
+            
+            # Update keyboard if it exists
+            if hasattr(self.keyboard_area, 'set_font_size'):
+                # First ensure the keyboard is properly sized
+                current_height = self.keyboard_area.height()
+                if current_height < 120:
+                    # Set a minimum reasonable height
+                    self.keyboard_area.resize(self.keyboard_area.width(), 264)
+                    logger.info(f"Adjusted keyboard height to minimum before setting font size")
+                
+                # Calculate appropriate height based on font size
+                # This is the inverse of the calculation in the keyboard's mouseReleaseEvent
+                base_height = 264
+                base_font_size = 26
+                calculated_height = int((size / base_font_size) * base_height)
+                
+                # Set a flag to prevent automatic font size adjustment during resize
+                if hasattr(self.keyboard_area, '_manual_font_size'):
+                    self.keyboard_area._manual_font_size = True
+                
+                # Only resize if the height difference is significant
+                if abs(calculated_height - current_height) > 10:
+                    # Resize the keyboard to match the font size
+                    self.keyboard_area.resize(self.keyboard_area.width(), calculated_height)
+                    logger.info(f"Adjusted keyboard height to {calculated_height} based on font size {size}")
+                
+                # Now set the font size - this will trigger update_buttons
+                # Pass a flag to indicate this is a manual font size change
+                self.keyboard_area.set_font_size(size)
+                logger.info(f"Keyboard font size updated to: {size}")
+                
+                # Force an update of the buttons after setting the font size
+                if hasattr(self.keyboard_area, 'update_buttons'):
+                    self.keyboard_area.update_buttons()
+                    logger.info("Forced update of keyboard buttons after font size change")
+                
+                # Keep the manual font size flag set for a short time to prevent resize loops
+                # We'll use a timer to reset it after a delay
+                if hasattr(self, '_keyboard_font_timer'):
+                    try:
+                        self._keyboard_font_timer.stop()
+                    except:
+                        pass
+                
+                from PySide6.QtCore import QTimer
+                self._keyboard_font_timer = QTimer()
+                self._keyboard_font_timer.setSingleShot(True)
+                self._keyboard_font_timer.timeout.connect(self._reset_keyboard_font_flag)
+                self._keyboard_font_timer.start(500)  # 500ms delay
+            
+            # Save preferences
+            config.save_user_preferences(self.preferences)
+        except Exception as e:
+            logger.error(f"Error setting keyboard font size: {e}")
+    
+    def _reset_keyboard_font_flag(self):
+        """Reset the manual font size flag after a delay."""
+        try:
+            if hasattr(self.keyboard_area, '_manual_font_size'):
+                self.keyboard_area._manual_font_size = False
+                logger.info("Reset keyboard manual font size flag")
+        except Exception as e:
+            logger.error(f"Error resetting keyboard font flag: {e}")
         
     def change_font_family(self, font_name):
         """Change the font family for the editor."""
@@ -1741,6 +2078,17 @@ class SinhalaWordApp(QMainWindow):
         self.reset_keyboard_action.setShortcut("Ctrl+Alt+K")
         self.reset_keyboard_action.triggered.connect(self.reset_keyboard_size)
         view_menu.addAction(self.reset_keyboard_action)
+        
+        # Add keyboard font size submenu
+        keyboard_font_menu = QMenu("Keyboard Font Size", self)
+        
+        # Add font size options - use larger sizes for better visibility
+        for size in [40, 50, 60, 70, 80]:
+            action = QAction(f"{size}pt", self)
+            action.triggered.connect(lambda checked, s=size: self.set_keyboard_font_size(s))
+            keyboard_font_menu.addAction(action)
+            
+        view_menu.addMenu(keyboard_font_menu)
 
         # Add toggle suggestions action
         view_menu.addAction(self.suggestions_toggle_action)
@@ -2536,10 +2884,63 @@ class SinhalaWordApp(QMainWindow):
         """Handle window show event to ensure it fits on screen."""
         super().showEvent(event)
         
-        # Ensure window and keyboard fit on screen after a short delay
+        # Set a flag to indicate we're in the initial show event
+        # This will prevent manual resizes from being overridden
+        self._in_initial_show = True
+        
+        # Ensure window fits on screen after a short delay
         # to allow the window to fully initialize
         QTimer.singleShot(200, self.ensure_window_fits_screen)
-        QTimer.singleShot(300, self.ensure_keyboard_fits_screen)
+        
+        # Ensure keyboard fits on screen, but only during initial startup
+        QTimer.singleShot(300, lambda: self._initial_keyboard_check())
+        
+        # Clear the initial show flag after a delay
+        QTimer.singleShot(1000, lambda: setattr(self, '_in_initial_show', False))
+        
+    def _initial_keyboard_check(self):
+        """Perform initial keyboard size check during startup only."""
+        # Only run the keyboard size check if we're in the initial show
+        if hasattr(self, '_in_initial_show') and self._in_initial_show:
+            self.ensure_keyboard_fits_screen()
+            
+            # After initial sizing, set the keyboard as manually sized
+            # to prevent automatic resizing from changing it
+            self._manual_resize = True
+            
+            # Clear the manual resize flag after a delay
+            QTimer.singleShot(1000, lambda: setattr(self, '_manual_resize', False))
+    
+    # --- Resize Event ---
+    def resizeEvent(self, event):
+        """Handle window resize events."""
+        # Store the old size before calling the parent's resizeEvent
+        old_size = event.oldSize()
+        
+        # Call the parent's resizeEvent
+        super().resizeEvent(event)
+        
+        # Update suggestion popup position if it's visible
+        if hasattr(self, 'suggestion_popup') and self.suggestion_popup.isVisible():
+            self.update_suggestion_popup_position()
+        
+        # Only update keyboard if the width changed, not the height
+        # This prevents resize loops when the keyboard itself is being resized
+        if hasattr(self, 'keyboard_area') and old_size.width() != self.width():
+            try:
+                # Set a flag to indicate we're in a programmatic resize
+                if not hasattr(self, '_in_resize'):
+                    self._in_resize = True
+                    
+                    # Update the keyboard buttons to match the new window size
+                    if hasattr(self.keyboard_area, 'update_buttons'):
+                        self.keyboard_area.update_buttons()
+                    
+                    # Clear the flag
+                    self._in_resize = False
+            except Exception as e:
+                logger.error(f"Error updating keyboard in resize event: {e}")
+                self._in_resize = False
     
     # --- Close Event ---
     def closeEvent(self, event):
@@ -2657,9 +3058,14 @@ class SinhalaWordApp(QMainWindow):
         self.base_font.setStyleStrategy(QFont.StyleStrategy.PreferMatch)
         self.editor.setFont(self.base_font)
         
-        # Apply keyboard settings
-        self.keyboard_area.font_size = self.preferences["keyboard_font_size"]
-        self.keyboard_area.update_theme()  # This will update the button styles
+        # Apply keyboard settings - rewritten with consistent indentation
+        if hasattr(self.keyboard_area, 'set_font_size'):
+            # Use the proper method to update font size
+            self.keyboard_area.set_font_size(self.preferences["keyboard_font_size"])
+        else:
+            # Fallback to direct property setting
+            self.keyboard_area.font_size = self.preferences["keyboard_font_size"]
+            self.keyboard_area.update_theme()  # This will update the button styles
         
         # Apply keyboard visibility
         if self.preferences["show_keyboard"]:

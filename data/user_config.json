@@ -1,19 +1,15 @@
 {
     "theme": "dark",
-    "font": "Post No Bills Colombo",
-    "font_size": 48,
+    "font": "AF Sigiri",
+    "font_size": 72,
     "window_size": [
-        1410,
-        1044
+        1920,
+        1137
     ],
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
-    "recent_files": [
-        "C:/Users/3D-Workstation-2017/Documents/brescia calcio.txt",
-        "C:/sinhalaword/sinhala-word/sinhala word working output.txt",
-        "C:/sinhala word/sinhala word working output.txt"
-    ],
-    "keyboard_font_size": 22,
-    "keyboard_height": 290
+    "recent_files": [],
+    "keyboard_font_size": 60,
+    "keyboard_height": 600
 }

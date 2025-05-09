@@ -3,7 +3,7 @@ Settings dialog for the Sinhala Word Processor.
 """
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QComboBox, QSpinBox, QCheckBox, QTabWidget, QWidget,
+    QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QSlider
 )
 import os
@@ -66,11 +66,11 @@ class SettingsDialog(QDialog):
         keyboard_group = QGroupBox("Keyboard Settings")
         keyboard_layout = QFormLayout(keyboard_group)
         
-        # Keyboard font size
+        # Keyboard font size - use QSpinBox for integer values
         self.keyboard_font_size = QSpinBox()
-        self.keyboard_font_size.setMinimum(16)
-        self.keyboard_font_size.setMaximum(48)
-        self.keyboard_font_size.setSingleStep(2)
+        self.keyboard_font_size.setMinimum(20)
+        self.keyboard_font_size.setMaximum(200)
+        self.keyboard_font_size.setSingleStep(1)
         keyboard_layout.addRow("Keyboard Font Size:", self.keyboard_font_size)
         
         # Show keyboard checkbox

@@ -169,6 +169,17 @@ def _phonetic_global(word: str) -> str:
 # ------------------------------------------------------------------
 #  Main window class
 # ------------------------------------------------------------------
+from enum import Enum
+
+# Constants for font size limits - must match keyboard.py
+MIN_KB_FONT = 10  # Minimum keyboard font size
+MAX_KB_FONT = 200  # Maximum keyboard font size
+
+class ResizeState(Enum):
+    IDLE = 0
+    USER = 1  # mouse/drag
+    PROGRAMMATIC = 2
+
 class SinhalaWordApp(QMainWindow):
     """
     SinhalaWordApp: Main application class for the Sinhala Word Processor.
@@ -181,6 +192,8 @@ class SinhalaWordApp(QMainWindow):
     - Dark / Light theme toggle (View → Toggle Theme) - Enhanced implementation
     - Plain‑text load/save functionality.
     """
+    # Centralized resize state
+    _kb_resize_state = ResizeState.IDLE
     def __init__(self):
         # --- Load User Preferences ---
         self.preferences = config.load_user_preferences()
@@ -419,8 +432,8 @@ class SinhalaWordApp(QMainWindow):
             keyboard_height = self.preferences.get("keyboard_height", default_keyboard_height)
             logging.info(f"No screen info available, using keyboard height: {keyboard_height}")
         
-        # Set minimum height but allow for resizing
-        self.keyboard_container.setMinimumHeight(120)
+        # Set a smaller minimum height to allow more flexibility
+        self.keyboard_container.setMinimumHeight(80)
         
         # Create a splitter handle effect by adding a frame at the top of the keyboard container
         splitter_handle = QFrame(self.keyboard_container)
@@ -486,7 +499,7 @@ class SinhalaWordApp(QMainWindow):
                         
                     # Calculate new height
                     delta_y = event.globalY() - self.drag_start_y
-                    new_height = max(120, self.drag_start_height - delta_y)
+                    new_height = max(80, self.drag_start_height - delta_y)
                     
                     # Resize the container directly
                     self.parent().resize(self.parent().width(), new_height)
@@ -536,9 +549,9 @@ class SinhalaWordApp(QMainWindow):
                             # Get the current container height
                             container_height = self.parent().height()
                             
-                            # Make sure the container height is reasonable (at least 120px)
-                            if container_height < 120:
-                                container_height = 120
+                            # Make sure the container height is reasonable (at least 80px)
+                            if container_height < 80:
+                                container_height = 80
                                 self.parent().resize(self.parent().width(), container_height)
                             
                             # Calculate keyboard height (container height minus margins and handle)
@@ -598,7 +611,7 @@ class SinhalaWordApp(QMainWindow):
         self.keyboard_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
         # Make sure the container can be resized
-        self.keyboard_container.setMinimumHeight(120)  # Minimum reasonable height
+        self.keyboard_container.setMinimumHeight(80)  # Smaller minimum height for flexibility
         self.keyboard_container.setMaximumHeight(16777215)  # Maximum possible height (QWIDGETSIZE_MAX)
         
         # Create layout for keyboard container
@@ -606,8 +619,32 @@ class SinhalaWordApp(QMainWindow):
         keyboard_layout.setContentsMargins(2, 2, 2, 2)
         keyboard_layout.setSpacing(2)
         
-        # Add the splitter handle to the top of the layout
+        # Add a control bar with buttons
+        control_bar = QHBoxLayout()
+        
+        # Add a button to detach the keyboard
+        detach_btn = QPushButton("Detach Keyboard")
+        detach_btn.setToolTip("Make the keyboard a floating window")
+        detach_btn.clicked.connect(self.detach_keyboard)
+        control_bar.addWidget(detach_btn)
+        
+        # Add a button to reset keyboard size
+        reset_btn = QPushButton("Reset Size")
+        reset_btn.setToolTip("Reset keyboard to default size")
+        reset_btn.clicked.connect(self.reset_keyboard_size)
+        control_bar.addWidget(reset_btn)
+        
+        # Add spacer to push buttons to the left
+        control_bar.addStretch(1)
+        
+        # Add the control bar to the layout
+        keyboard_layout.addLayout(control_bar)
+        
+        # Add the splitter handle to the layout
         keyboard_layout.addWidget(splitter_handle)
+        
+        # Set an object name for the keyboard container to make it easier to find
+        self.keyboard_container.setObjectName("keyboard_container")
         
         # Add the keyboard to the container with stretch factor
         try:
@@ -904,9 +941,19 @@ class SinhalaWordApp(QMainWindow):
     def _process_keyboard_resize(self):
         """Process the pending keyboard resize after the debounce timer times out."""
         try:
-            # Check if we're in a manual resize - if so, skip automatic resizing
-            if hasattr(self, '_manual_resize') and self._manual_resize:
-                logger.debug("Skipping automatic resize as we're in a manual resize operation")
+            # Check if we're in a user-initiated resize - if so, skip automatic resizing
+            if hasattr(self, '_kb_resize_state') and self._kb_resize_state == ResizeState.USER:
+                logger.debug("Skipping automatic resize as we're in a user-initiated resize operation")
+                return
+                
+            # Also check if the keyboard is in a manual resize operation
+            if hasattr(self.keyboard_area, 'resize_in_progress') and self.keyboard_area.resize_in_progress:
+                logger.debug("Skipping automatic resize as keyboard is in a manual resize operation")
+                return
+                
+            # Also check if the keyboard has the manual font size flag set
+            if hasattr(self.keyboard_area, '_manual_font_size') and self.keyboard_area._manual_font_size:
+                logger.debug("Skipping automatic resize as keyboard has manual font size flag set")
                 return
                 
             # Get the pending height
@@ -974,33 +1021,48 @@ class SinhalaWordApp(QMainWindow):
                 if hasattr(self.keyboard_area, 'update_buttons'):
                     self.keyboard_area.update_buttons()
                     
-                # Calculate a new font size based on the keyboard height
-                # This ensures the font size is proportional to the keyboard height
-                # Base calculation: default height 264px corresponds to font size 26
-                # So for every 10px of height, we change font size by about 1
-                base_height = 264
-                base_font_size = 26
-                current_font_size = self.preferences.get("keyboard_font_size", base_font_size)
+                # Check if the keyboard is in a manual resize operation
+                # If so, we should respect its current font size
+                keyboard_in_manual_resize = (hasattr(self.keyboard_area, '_manual_font_size') and 
+                                           self.keyboard_area._manual_font_size)
                 
-                # Calculate new font size proportional to height and round to nearest integer
-                new_font_size = max(20, min(200, round(base_font_size * new_height / base_height)))
-                
-                # Only update if the integer value has changed significantly (more than 2 points)
-                # This prevents small oscillations that can cause resize loops
-                if abs(new_font_size - current_font_size) > 2:
-                    logger.info(f"Adjusting keyboard font size from {current_font_size} to {new_font_size} based on height {new_height}")
-                    # Update the font size without triggering another resize
-                    self._manual_resize = True
-                    self.preferences["keyboard_font_size"] = new_font_size
+                # Only adjust font size if not in a manual resize operation
+                if not keyboard_in_manual_resize:
+                    # Calculate a new font size based on the keyboard height
+                    # This ensures the font size is proportional to the keyboard height
+                    # Base calculation: default height 264px corresponds to font size 26
+                    base_height = 264
+                    base_font_size = 26
+                    current_font_size = self.preferences.get("keyboard_font_size", base_font_size)
                     
-                    # Update the keyboard font size directly without calling set_font_size
-                    # to avoid triggering another resize
-                    if hasattr(self.keyboard_area, 'font_size'):
-                        self.keyboard_area.font_size = new_font_size
+                    # Calculate new font size proportional to height and round to nearest integer
+                    new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(base_font_size * new_height / base_height)))
+                    
+                    # Only update if the integer value has changed significantly (more than 2 points)
+                    # This prevents small oscillations that can cause resize loops
+                    if abs(new_font_size - current_font_size) > 2:
+                        logger.info(f"Adjusting keyboard font size from {current_font_size} to {new_font_size} based on height {new_height}")
+                        # Update the font size without triggering another resize
+                        self._manual_resize = True
+                        self.preferences["keyboard_font_size"] = new_font_size
                         
-                    # Update the buttons again with the new font size
-                    if hasattr(self.keyboard_area, 'update_buttons'):
-                        self.keyboard_area.update_buttons()
+                        # Update the keyboard font size directly without calling set_font_size
+                        # to avoid triggering another resize
+                        if hasattr(self.keyboard_area, 'font_size'):
+                            self.keyboard_area.font_size = new_font_size
+                            
+                        # Update the buttons again with the new font size
+                        if hasattr(self.keyboard_area, 'update_buttons'):
+                            self.keyboard_area.update_buttons()
+                else:
+                    # We're in a manual resize operation, so respect the keyboard's current font size
+                    logger.info(f"Skipping font size adjustment during manual keyboard resize")
+                    
+                    # Update the preferences with the keyboard's current font size
+                    if hasattr(self.keyboard_area, 'font_size'):
+                        current_font_size = self.keyboard_area.font_size
+                        self.preferences["keyboard_font_size"] = current_font_size
+                        logger.info(f"Updated preferences with current keyboard font size: {current_font_size}")
                     
                 # Force layout update to apply changes
                 self.updateGeometry()
@@ -1025,6 +1087,16 @@ class SinhalaWordApp(QMainWindow):
             # Check if we're in a manual resize - if so, skip automatic adjustments
             if hasattr(self, '_manual_resize') and self._manual_resize:
                 logger.debug("Skipping keyboard size check as we're in a manual resize operation")
+                return
+                
+            # Also check if the keyboard is in a manual resize operation
+            if hasattr(self.keyboard_area, 'resize_in_progress') and self.keyboard_area.resize_in_progress:
+                logger.debug("Skipping keyboard size check as keyboard is in a manual resize operation")
+                return
+                
+            # Also check if the keyboard has the manual font size flag set
+            if hasattr(self.keyboard_area, '_manual_font_size') and self.keyboard_area._manual_font_size:
+                logger.debug("Skipping keyboard size check as keyboard has manual font size flag set")
                 return
                 
             # Get current screen size
@@ -1277,6 +1349,33 @@ class SinhalaWordApp(QMainWindow):
                 self.keyboard_toggle_action.setChecked(True)
             # Update preferences
             self.preferences["show_keyboard"] = True
+    
+    def detach_keyboard(self):
+        """Detach the keyboard to make it a floating window."""
+        try:
+            # Check if the keyboard is a SinhalaKeyboard
+            if hasattr(self.keyboard_area, 'make_detachable'):
+                # Hide the keyboard container
+                self.keyboard_container.hide()
+                
+                # Make the keyboard detachable
+                dialog = self.keyboard_area.make_detachable()
+                
+                # Store the dialog reference to prevent garbage collection
+                self._keyboard_dialog = dialog
+                
+                # Update preferences
+                self.preferences["keyboard_detached"] = True
+                
+                # Save preferences immediately to disk
+                from app import config
+                config.save_user_preferences(self.preferences)
+                
+                logger.info("Keyboard detached to floating window")
+            else:
+                logger.warning("Cannot detach keyboard - not a SinhalaKeyboard instance")
+        except Exception as e:
+            logger.error(f"Error detaching keyboard: {e}")
             
     def reset_keyboard_size(self):
         """Reset the keyboard to its default size."""
@@ -1284,9 +1383,7 @@ class SinhalaWordApp(QMainWindow):
             # Default keyboard height
             default_height = 600  # Increased default height for better visibility
             
-            # Reset minimum height constraints
-            if hasattr(self.keyboard_area, 'setMinimumHeight'):
-                self.keyboard_area.setMinimumHeight(400)  # Ensure minimum height is maintained
+            # We no longer set minimum height constraints to allow more flexibility
             
             # Use resize instead of setFixedHeight to allow future resizing
             self.keyboard_area.resize(self.keyboard_area.width(), default_height)
@@ -1328,8 +1425,14 @@ class SinhalaWordApp(QMainWindow):
             size = round(float(size))
             
             # Validate size
-            if size < 20 or size > 200:
+            if size < MIN_KB_FONT or size > MAX_KB_FONT:
                 logger.warning(f"Invalid keyboard font size: {size}")
+                return
+                
+            # Guard against race conditions before we overwrite a user-set font
+            if self._kb_resize_state == ResizeState.USER or \
+               getattr(self.keyboard_area, '_manual_font_size', False):
+                logger.debug("Skipping automatic font-calc during a user-initiated resize.")
                 return
                 
             # Update preferences
@@ -1337,28 +1440,33 @@ class SinhalaWordApp(QMainWindow):
             
             # Update keyboard if it exists
             if hasattr(self.keyboard_area, 'set_font_size'):
-                # First ensure the keyboard is properly sized
+                # Get the current keyboard height
                 current_height = self.keyboard_area.height()
-                if current_height < 120:
-                    # Set a minimum reasonable height
-                    self.keyboard_area.resize(self.keyboard_area.width(), 264)
-                    logger.info(f"Adjusted keyboard height to minimum before setting font size")
                 
-                # Calculate appropriate height based on font size
-                # This is the inverse of the calculation in the keyboard's mouseReleaseEvent
-                base_height = 264
-                base_font_size = 26
-                calculated_height = int((size / base_font_size) * base_height)
+                # Check if we're in a manual resize operation
+                keyboard_in_manual_resize = (hasattr(self.keyboard_area, 'resize_in_progress') and 
+                                           self.keyboard_area.resize_in_progress)
                 
-                # Set a flag to prevent automatic font size adjustment during resize
-                if hasattr(self.keyboard_area, '_manual_font_size'):
-                    self.keyboard_area._manual_font_size = True
-                
-                # Only resize if the height difference is significant
-                if abs(calculated_height - current_height) > 10:
-                    # Resize the keyboard to match the font size
-                    self.keyboard_area.resize(self.keyboard_area.width(), calculated_height)
-                    logger.info(f"Adjusted keyboard height to {calculated_height} based on font size {size}")
+                # Only adjust height if we're not in a manual resize operation
+                if not keyboard_in_manual_resize:
+                    # Calculate appropriate height based on font size
+                    # This is the inverse of the calculation in the keyboard's mouseReleaseEvent
+                    base_height = 264
+                    base_font_size = 26
+                    calculated_height = int((size / base_font_size) * base_height)
+                    
+                    # Set a flag to prevent automatic font size adjustment during resize
+                    if hasattr(self.keyboard_area, '_manual_font_size'):
+                        self.keyboard_area._manual_font_size = True
+                    
+                    # Only resize if the height difference is significant
+                    if abs(calculated_height - current_height) > 10:
+                        # Resize the keyboard to match the font size
+                        self.keyboard_area.resize(self.keyboard_area.width(), calculated_height)
+                        logger.info(f"Adjusted keyboard height to {calculated_height} based on font size {size}")
+                else:
+                    # We're in a manual resize operation, so respect the current height
+                    logger.info(f"Keeping current keyboard height {current_height} during manual resize")
                 
                 # Now set the font size - this will trigger update_buttons
                 # Pass a flag to indicate this is a manual font size change
@@ -1382,7 +1490,7 @@ class SinhalaWordApp(QMainWindow):
                 self._keyboard_font_timer = QTimer()
                 self._keyboard_font_timer.setSingleShot(True)
                 self._keyboard_font_timer.timeout.connect(self._reset_keyboard_font_flag)
-                self._keyboard_font_timer.start(500)  # 500ms delay
+                self._keyboard_font_timer.start(2000)  # Increased to 2000ms (2 seconds) to prevent resize conflicts
             
             # Save preferences
             config.save_user_preferences(self.preferences)

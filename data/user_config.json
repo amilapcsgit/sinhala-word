@@ -3,13 +3,14 @@
     "font": "AF Sigiri",
     "font_size": 72,
     "window_size": [
-        1920,
-        1137
+        1728,
+        1009
     ],
     "show_keyboard": true,
     "show_suggestions": true,
-    "singlish_enabled": true,
+    "singlish_enabled": false,
     "recent_files": [],
-    "keyboard_font_size": 60,
-    "keyboard_height": 600
+    "keyboard_font_size": 44,
+    "keyboard_height": 489,
+    "keyboard_detached": true
 }

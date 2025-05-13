@@ -1,16 +1,16 @@
 {
     "theme": "dark",
-    "font": "UN-Bindumathi",
+    "font": "UN-Emanee",
     "font_size": 24,
     "window_size": [
-        1728,
-        1044
+        1920,
+        1137
     ],
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [],
-    "keyboard_font_size": 60,
-    "keyboard_height": 609,
-    "keyboard_detached": true
+    "keyboard_font_size": 47,
+    "keyboard_height": 210,
+    "keyboard_detached": false
 }

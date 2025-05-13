@@ -176,31 +176,13 @@ class SettingsDialog(QDialog):
         self.settingsApplied.emit(settings)
     
     def get_loaded_sinhala_fonts(self):
-        """Get only the Sinhala fonts that have been loaded by the application."""
-        # Get the fonts directory
-        fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "fonts")
+        """Get Sinhala fonts from the FontManager."""
+        # Import FontManager here to avoid circular imports
+        from ui.font_manager import FontManager
+        font_manager = FontManager()
         
-        # If we still don't have a valid fonts directory, return a default list
-        if not os.path.exists(fonts_dir):
-            return ["UN-Ganganee", "Iskoola Pota", "Nirmala UI"]
-        
-        # Get the fonts that we've loaded from our fonts directory
-        loaded_fonts = []
-        for font_file in os.listdir(fonts_dir):
-            if font_file.lower().endswith(('.ttf', '.otf')):
-                font_path = os.path.join(fonts_dir, font_file)
-                font_id = QFontDatabase.addApplicationFont(font_path)
-                if font_id != -1:
-                    families = QFontDatabase.applicationFontFamilies(font_id)
-                    loaded_fonts.extend(families)
-        
-        # Add some common system Sinhala fonts as fallbacks
-        fallback_fonts = ["Iskoola Pota", "Nirmala UI", "Dinamika", "Malithi Web"]
-        for font in fallback_fonts:
-            if font not in loaded_fonts:
-                loaded_fonts.append(font)
-        
-        return loaded_fonts
+        # Return the list of available fonts from the font manager
+        return font_manager.get_available_fonts()
         
     def accept(self):
         """Accept the dialog and apply settings."""

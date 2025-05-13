@@ -77,8 +77,8 @@ class FontSizeDelegate(QStyledItemDelegate):
         option.displayAlignment = Qt.AlignCenter
         super().paint(painter, option, index)
 
-# Path to the fonts directory - use absolute path to ensure it works correctly
-FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "fonts")
+# Import the FontManager
+from ui.font_manager import FontManager
 
 def configure_font_fallbacks():
     """Configure font fallbacks for better compatibility."""
@@ -92,49 +92,15 @@ def configure_font_fallbacks():
         logging.error(f"Failed to configure font fallbacks: {e}")
 
 def load_sinhala_fonts():
-    """Load Sinhala fonts from the fonts directory."""
-    global FONTS_DIR
-    font_families = []
-
-    # Check if fonts directory exists
-    if not os.path.exists(FONTS_DIR):
-        logging.warning(f"Fonts directory not found at {FONTS_DIR}")
-        # Try alternate path
-        alt_fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
-        if os.path.exists(alt_fonts_dir):
-            logging.info(f"Using alternate fonts directory: {alt_fonts_dir}")
-            FONTS_DIR = alt_fonts_dir
-
-    # Load fonts from directory
-    if os.path.exists(FONTS_DIR):
-        logging.info(f"Loading fonts from: {FONTS_DIR}")
-        for font_file in os.listdir(FONTS_DIR):
-            if font_file.lower().endswith(('.ttf', '.otf')):
-                font_path = os.path.join(FONTS_DIR, font_file)
-                font_id = QFontDatabase.addApplicationFont(font_path)
-                if font_id != -1:
-                    family = QFontDatabase.applicationFontFamilies(font_id)
-                    if family:
-                        font_families.append(family[0])
-                        logging.info(f"Loaded font: {family[0]} from {font_file}")
-                else:
-                    logging.error(f"Failed to load font: {font_file}")
-    else:
-        logging.error(f"Fonts directory not found: {FONTS_DIR}")
-
-    # Check for system Sinhala fonts as fallbacks
-    system_sinhala_fonts = ["Iskoola Pota", "Nirmala UI"]
-    for font_name in system_sinhala_fonts:
-        if QFontDatabase.hasFamily(font_name) and font_name not in font_families:
-            font_families.append(font_name)
-            logging.info(f"Found system Sinhala font: {font_name}")
-
-    # If no fonts were found, add a default system font
-    if not font_families:
-        font_families.append("Arial")
-        logging.warning("No Sinhala fonts found, using Arial as fallback")
-
-    return font_families
+    """Load Sinhala fonts using the FontManager."""
+    # Initialize the font manager (singleton)
+    font_manager = FontManager()
+    
+    # Load fonts
+    font_manager.load_fonts()
+    
+    # Return the list of available fonts
+    return font_manager.get_available_fonts()
 
 
 
@@ -202,50 +168,15 @@ class SinhalaWordApp(QMainWindow):
         # --- Load User Preferences ---
         self.preferences = config.load_user_preferences()
 
-        # --- Load Sinhala Fonts ---
-        self.sinhala_font_families = load_sinhala_fonts()
-        font_size = self.preferences["font_size"]
+        # --- Initialize Font Manager ---
+        self.font_manager = FontManager()
+        self.font_manager.update_from_preferences(self.preferences)
         
-        # Prioritize fonts in this order: UN-Ganganee, Iskoola Pota, other loaded fonts
-        preferred_fonts = ["UN-Ganganee", "Iskoola Pota", "Nirmala UI"]
+        # Get the list of available fonts for UI components
+        self.sinhala_font_families = self.font_manager.get_available_fonts()
         
-        # First try to use the preferred font from user preferences
-        preferred_font = self.preferences["font"]
-        font_name = None
-        
-        # Check if preferred font is available
-        if preferred_font in self.sinhala_font_families:
-            font_name = preferred_font
-            logging.info(f"Using preferred Sinhala font: {font_name}")
-        else:
-            # Try each font in our priority list
-            for priority_font in preferred_fonts:
-                if priority_font in self.sinhala_font_families:
-                    font_name = priority_font
-                    logging.info(f"Using priority Sinhala font: {font_name}")
-                    # Update preferences
-                    self.preferences["font"] = font_name
-                    break
-            
-            # If none of the priority fonts are available, use the first available font
-            if not font_name and self.sinhala_font_families:
-                font_name = self.sinhala_font_families[0]
-                logging.info(f"Using available Sinhala font: {font_name}")
-                # Update preferences
-                self.preferences["font"] = font_name
-        
-        # If still no font found, use a system font that should be available
-        if not font_name:
-            font_name = "Arial"
-            logging.warning(f"No Sinhala fonts loaded, using system font: {font_name}")
-            self.preferences["font"] = font_name
-        
-        # Create the font with a strategy that allows better fallback
-        self.base_font = QFont(font_name, font_size)
-        # Use PreferMatch instead of NoFontMerging for better compatibility
-        self.base_font.setStyleHint(QFont.StyleHint.AnyStyle, QFont.StyleStrategy.PreferMatch)
-        
-        # Apply to editor
+        # Create the base font using the font manager
+        self.base_font = self.font_manager.get_font()
         
         # --- Initialize Core Attributes FIRST ---
         self.MAIN_LEXICON = {}
@@ -272,10 +203,6 @@ class SinhalaWordApp(QMainWindow):
 
         # --- Create Core Widgets ---
         self.editor = QTextEdit()
-        self.base_font = QFont(
-            self.preferences["font"], 
-            self.preferences["font_size"]
-        )
         self.editor.setFont(self.base_font)
 
         # --- Call Superclass Initializer ---
@@ -618,31 +545,10 @@ class SinhalaWordApp(QMainWindow):
         self.keyboard_container.setMinimumHeight(80)  # Smaller minimum height for flexibility
         self.keyboard_container.setMaximumHeight(16777215)  # Maximum possible height (QWIDGETSIZE_MAX)
         
-        # Create layout for keyboard container
+        # Create layout for keyboard container with minimal margins
         keyboard_layout = QVBoxLayout(self.keyboard_container)
-        keyboard_layout.setContentsMargins(2, 2, 2, 2)
-        keyboard_layout.setSpacing(2)
-        
-        # Add a control bar with buttons
-        control_bar = QHBoxLayout()
-        
-        # Add a button to detach the keyboard
-        detach_btn = QPushButton("Detach Keyboard")
-        detach_btn.setToolTip("Make the keyboard a floating window")
-        detach_btn.clicked.connect(self.detach_keyboard)
-        control_bar.addWidget(detach_btn)
-        
-        # Add a button to reset keyboard size
-        reset_btn = QPushButton("Reset Size")
-        reset_btn.setToolTip("Reset keyboard to default size")
-        reset_btn.clicked.connect(self.reset_keyboard_size)
-        control_bar.addWidget(reset_btn)
-        
-        # Add spacer to push buttons to the left
-        control_bar.addStretch(1)
-        
-        # Add the control bar to the layout
-        keyboard_layout.addLayout(control_bar)
+        keyboard_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+        keyboard_layout.setSpacing(0)  # Remove spacing
         
         # Add the splitter handle to the layout
         keyboard_layout.addWidget(splitter_handle)
@@ -1350,6 +1256,14 @@ class SinhalaWordApp(QMainWindow):
         try:
             # Check if the keyboard is a SinhalaKeyboard
             if hasattr(self.keyboard_area, 'make_detachable'):
+                # Check if keyboard is already detached
+                if hasattr(self, '_keyboard_dialog') and self._keyboard_dialog is not None:
+                    logger.info("Keyboard is already detached")
+                    # Bring the existing dialog to front
+                    self._keyboard_dialog.raise_()
+                    self._keyboard_dialog.activateWindow()
+                    return
+                
                 # Hide the keyboard container
                 self.keyboard_container.hide()
                 
@@ -1371,6 +1285,27 @@ class SinhalaWordApp(QMainWindow):
                 logger.warning("Cannot detach keyboard - not a SinhalaKeyboard instance")
         except Exception as e:
             logger.error(f"Error detaching keyboard: {e}")
+            
+    def dock_keyboard(self):
+        """Dock the keyboard back into the main window."""
+        try:
+            # Check if we have a detached keyboard dialog
+            if hasattr(self, '_keyboard_dialog') and self._keyboard_dialog is not None:
+                # Get the keyboard from the dialog
+                if hasattr(self.keyboard_area, 'make_embedded'):
+                    # Re-embed the keyboard
+                    self.keyboard_area.make_embedded(self, self._keyboard_dialog)
+                    
+                    # Clear the dialog reference
+                    self._keyboard_dialog = None
+                    
+                    logger.info("Keyboard docked back to main window")
+                else:
+                    logger.warning("Cannot dock keyboard - not a SinhalaKeyboard instance")
+            else:
+                logger.info("No detached keyboard to dock")
+        except Exception as e:
+            logger.error(f"Error docking keyboard: {e}")
             
     def reset_keyboard_size(self):
         """Reset the keyboard to its default size."""
@@ -2178,6 +2113,18 @@ class SinhalaWordApp(QMainWindow):
         self.toggle_keyboard_action.setShortcut("Ctrl+K")
         self.toggle_keyboard_action.triggered.connect(self.toggle_keyboard)
         view_menu.addAction(self.toggle_keyboard_action)
+        
+        # Add detach keyboard action
+        self.detach_keyboard_action = QAction("Detach Keyboard", self)
+        self.detach_keyboard_action.setShortcut("Ctrl+D")
+        self.detach_keyboard_action.triggered.connect(self.detach_keyboard)
+        view_menu.addAction(self.detach_keyboard_action)
+        
+        # Add dock keyboard action
+        self.dock_keyboard_action = QAction("Dock Keyboard", self)
+        self.dock_keyboard_action.setShortcut("Ctrl+Shift+D")
+        self.dock_keyboard_action.triggered.connect(self.dock_keyboard)
+        view_menu.addAction(self.dock_keyboard_action)
         
         # Add reset keyboard size action
         self.reset_keyboard_action = QAction("Reset Keyboard Size", self)

@@ -101,89 +101,42 @@ class SuggestionPopup(QWidget):
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         
     def setup_font(self):
-        """Set up the custom UN-Ganganee font."""
-        import os
+        """Set up the font using the FontManager."""
+        # Import FontManager here to avoid circular imports
+        from ui.font_manager import FontManager
+        self.font_manager = FontManager()
         
-        # Path to the font file - use absolute path to ensure it works correctly
-        font_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "fonts", "un-ganganee.otf")
+        # Get the font family from the font manager
+        self.font_family = self.font_manager.current_font
         
-        # Check if the font file exists
-        if os.path.exists(font_path):
-            # Create a font database and add the font
-            from PySide6.QtGui import QFontDatabase
-            font_id = QFontDatabase.addApplicationFont(font_path)
-            
-            if font_id != -1:
-                # Get the font family name
-                font_families = QFontDatabase.applicationFontFamilies(font_id)
-                if font_families:
-                    self.font_family = font_families[0]
-                    logger.info(f"Successfully loaded font family: {self.font_family}")
-                else:
-                    # Try to find any Sinhala font from the resources/fonts directory
-                    self.find_sinhala_font()
-            else:
-                # Try to find any Sinhala font from the resources/fonts directory
-                self.find_sinhala_font()
-                logger.warning(f"Failed to add font from {font_path}, using {self.font_family}")
-                
-            # Create the font with appropriate size
-            self.popup_font = QFont(self.font_family)
-            # Prevent font merging to avoid using system fonts
-            self.popup_font.setStyleStrategy(QFont.StyleStrategy.NoFontMerging)
-            
-            # Get system DPI settings to adjust font size
-            # Default to size 20 if we can't determine system settings
-            try:
-                from PySide6.QtGui import QGuiApplication
-                screen = QGuiApplication.primaryScreen()
-                dpi = screen.logicalDotsPerInch()
-                # Scale font size based on DPI (20 at 96 DPI, up to 40 at 192 DPI)
-                font_size = max(20, min(40, int(20 * dpi / 96)))
-            except Exception as e:
-                logger.warning(f"Error getting DPI: {e}")
-                font_size = 20
-                
-            self.popup_font.setPointSize(font_size)
-            self.popup_font.setBold(False)  # Ensure it's not bold by default
-            self.setFont(self.popup_font)
-            
-            logger.info(f"Using font: {self.font_family} at size {font_size}")
-        else:
-            logger.warning(f"Font file not found: {font_path}")
-            # Try to find any Sinhala font from the resources/fonts directory
-            self.find_sinhala_font()
-            self.popup_font = QFont(self.font_family, 20)
-            # Prevent font merging to avoid using system fonts
-            self.popup_font.setStyleStrategy(QFont.StyleStrategy.NoFontMerging)
-            
+        # Get system DPI settings to adjust font size
+        # Default to size 20 if we can't determine system settings
+        try:
+            from PySide6.QtGui import QGuiApplication
+            screen = QGuiApplication.primaryScreen()
+            dpi = screen.logicalDotsPerInch()
+            # Scale font size based on DPI (20 at 96 DPI, up to 40 at 192 DPI)
+            font_size = max(20, min(40, int(20 * dpi / 96)))
+        except Exception as e:
+            logger.warning(f"Error getting DPI: {e}")
+            font_size = 20
+        
+        # Create the font with appropriate size using the font manager
+        self.popup_font = self.font_manager.get_font(font_size)
+        self.popup_font.setBold(False)  # Ensure it's not bold by default
+        self.setFont(self.popup_font)
+        
+        logger.info(f"Suggestion popup using font: {self.font_family} at size {font_size}")
+    
     def find_sinhala_font(self):
-        """Find any available Sinhala font from the resources/fonts directory."""
-        import os
-        
-        # Path to the fonts directory
-        fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "fonts")
-        
-        # Default font family in case we can't find any
-        self.font_family = "UN-Ganganee"
-        
-        # Check if fonts directory exists
-        if os.path.exists(fonts_dir):
-            from PySide6.QtGui import QFontDatabase
-            
-            # Try to find any Sinhala font
-            for font_file in os.listdir(fonts_dir):
-                if font_file.lower().endswith(('.ttf', '.otf')):
-                    font_path = os.path.join(fonts_dir, font_file)
-                    font_id = QFontDatabase.addApplicationFont(font_path)
-                    if font_id != -1:
-                        families = QFontDatabase.applicationFontFamilies(font_id)
-                        if families:
-                            self.font_family = families[0]
-                            logger.info(f"Using alternative Sinhala font: {self.font_family}")
-                            return
-            
-            logger.warning("Could not find any usable Sinhala font in resources/fonts directory")
+        """
+        Legacy method kept for backward compatibility.
+        Font discovery is now handled by the FontManager.
+        """
+        # This method is no longer needed as FontManager handles font discovery
+        # Just update the font family from the font manager
+        self.font_family = self.font_manager.current_font
+        logger.info(f"Using font from FontManager: {self.font_family}")
         
     def setup_ui(self):
         """Set up the UI components."""

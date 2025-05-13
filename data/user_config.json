@@ -1,7 +1,7 @@
 {
     "theme": "dark",
-    "font": "UN-Emanee",
-    "font_size": 24,
+    "font": "Noto Sans Sinhala",
+    "font_size": 26,
     "window_size": [
         1920,
         1137
@@ -10,7 +10,7 @@
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [],
-    "keyboard_font_size": 47,
-    "keyboard_height": 210,
+    "keyboard_font_size": 25,
+    "keyboard_height": 400,
     "keyboard_detached": false
 }

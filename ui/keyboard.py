@@ -8,18 +8,25 @@ os.environ["QT_FONT_NO_SYSTEM_FALLBACKS"] = "0"
 # Set up module-specific logger
 logger = logging.getLogger(__name__)
 
-# Constants for font size limits
-MIN_KB_FONT = 26  # Minimum keyboard font size (increased from 10 for better visibility)
-MAX_KB_FONT = 200  # Maximum keyboard font size
+# Import constants
+from ui.constants import (
+    MIN_KB_FONT, MAX_KB_FONT, BASE_KB_HEIGHT, BASE_KB_FONT, DEFAULT_KB_FONT_SIZE
+)
 
-# Standard base values for height/font calculations
-BASE_KB_HEIGHT = 264  # Base keyboard height
-BASE_KB_FONT = 26    # Base font size corresponding to the base height
+# Import FontManager
+from ui.font_manager import FontManager
 
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QWidget, 
                           QSizePolicy, QDialog, QLabel, QGridLayout, QSplitter)
 from PySide6.QtCore import Qt, Signal, QObject, QEvent, QSize
 from PySide6.QtGui import QColor, QFont, QCursor, QResizeEvent, QFontDatabase
+
+# Import ResizeState enum from main.py to ensure consistency
+from enum import Enum
+class ResizeState(Enum):
+    IDLE = 0
+    USER = 1  # mouse/drag
+    PROGRAMMATIC = 2
 
 class SinhalaKeyboard(QFrame):
     """PySide6 implementation of the Sinhala Keyboard with resizing capability"""
@@ -30,18 +37,22 @@ class SinhalaKeyboard(QFrame):
     # Signal emitted when keyboard is resized
     keyboardResized = Signal(int)
 
-    def __init__(self, parent=None, dark_mode=False, font_size=26):
+    def __init__(self, parent=None, dark_mode=False, font_size=None):
         super().__init__(parent)
         self.dark_mode = dark_mode
-        self.font_size = font_size
         self._manual_font_size = False  # Flag to prevent automatic font size adjustment when manually set
         
-        # Import FontManager here to avoid circular imports
-        from ui.font_manager import FontManager
+        # Create FontManager instance
         self.font_manager = FontManager()
         
         # Get the font family from the font manager
         self.keyboard_font_family = self.font_manager.current_font
+        
+        # Use the provided font size or get it from the font manager
+        if font_size is not None:
+            self.font_size = font_size
+        else:
+            self.font_size = self.font_manager.current_keyboard_font_size
         
         # Remove frame border
         self.setFrameShape(QFrame.NoFrame)
@@ -74,7 +85,7 @@ class SinhalaKeyboard(QFrame):
         self.setMouseTracking(True)
         
         # Set minimum width for the keyboard (but not height to allow more flexibility)
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(720)
         
         # Set size policy to allow both horizontal and vertical resizing
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -99,9 +110,14 @@ class SinhalaKeyboard(QFrame):
         # Update the font family from the font manager
         self.keyboard_font_family = self.font_manager.current_font
         
-        # If font_size was specified in constructor, update the font manager
-        if self.font_size != self.font_manager.current_keyboard_font_size:
-            self.font_manager.set_keyboard_font_size(self.font_size)
+        # Sync font size with the font manager
+        if self._manual_font_size:
+            # If font size was manually set, update the font manager
+            if self.font_size != self.font_manager.current_keyboard_font_size:
+                self.font_manager.set_keyboard_font_size(self.font_size)
+        else:
+            # Otherwise, use the font manager's size
+            self.font_size = self.font_manager.current_keyboard_font_size
             
         logger.info(f"Keyboard using font: {self.keyboard_font_family}, size: {self.font_size}")
 
@@ -367,7 +383,7 @@ class SinhalaKeyboard(QFrame):
     def reset_size(self):
         """Reset the keyboard to its default size"""
         # Default keyboard height
-        default_height = 600
+        default_height = 500
         
         # Resize the keyboard
         self.resize(self.width(), default_height)
@@ -378,9 +394,17 @@ class SinhalaKeyboard(QFrame):
     def _reset_manual_font_size(self):
         """Reset the manual font size flag safely."""
         try:
-            self._manual_font_size = False
-            self._pre_resize_font_size = None
-            logger.debug("Reset manual font size flag")
+            # Only reset if we're not currently in a resize operation
+            if not hasattr(self, 'resize_in_progress') or not self.resize_in_progress:
+                self._manual_font_size = False
+                self._pre_resize_font_size = None
+                logger.debug("Reset manual font size flag")
+                
+                # Force a final update of buttons after resetting the flag
+                # This ensures the keyboard layout is properly updated
+                self.update_buttons()
+            else:
+                logger.debug("Skipped resetting manual font size flag - resize in progress")
         except Exception as e:
             logger.error(f"Error resetting manual font size flag: {e}")
     
@@ -388,11 +412,20 @@ class SinhalaKeyboard(QFrame):
         """Update the font size and resize buttons accordingly"""
         # Convert to float and then round to nearest integer for consistency
         size = round(float(size))
+        
+        # Ensure size is within valid range
+        size = max(MIN_KB_FONT, min(MAX_KB_FONT, size))
+        
         if size != self.font_size:  # Simple integer comparison
             self.font_size = size
             logger.info(f"Updating keyboard font size to: {size}")
+            
             # Set a flag to prevent automatic font size adjustment
             self._manual_font_size = True
+            
+            # Sync with font manager
+            self.font_manager.set_keyboard_font_size(size)
+            
             # Update the buttons to reflect the new font size
             self.update_buttons()
             # The flag will be reset by a timer after a delay
@@ -401,7 +434,7 @@ class SinhalaKeyboard(QFrame):
     def update_buttons(self):
         """Update all existing buttons with the current style and size"""
         try:
-            # Check if we're in a manual resize operation - if so, be very conservative
+            # Get the current resize state
             in_resize_operation = hasattr(self, 'resize_in_progress') and self.resize_in_progress
             
             # Check if we're in a programmatic resize from the main window
@@ -413,7 +446,7 @@ class SinhalaKeyboard(QFrame):
                     for widget in app.topLevelWidgets():
                         if (widget.__class__.__name__ == "SinhalaWordApp" and 
                             hasattr(widget, '_kb_resize_state') and 
-                            widget._kb_resize_state == widget.ResizeState.PROGRAMMATIC):
+                            widget._kb_resize_state == ResizeState.PROGRAMMATIC):
                             in_programmatic_resize = True
                             break
             except Exception:
@@ -431,91 +464,85 @@ class SinhalaKeyboard(QFrame):
                 
             grid_layout = self.grid_layout # Use the stored instance variable
 
-            # Calculate available height for the grid
-            # Subtract main layout margins (top and bottom) and spacing between items
+            # Calculate available space for the grid
             available_height = self.height() - self.layout().contentsMargins().top() - self.layout().contentsMargins().bottom()
-            
-            # Subtract spacing between the grid and other widgets in the main layout
-            for i in range(self.layout().count()):
-                 item = self.layout().itemAt(i)
-                 if item and item.widget() and item.widget() != self: # Exclude self if it somehow gets added
-                      available_height -= self.layout().spacing()
-
-            # Subtract height of the resize hint label (assuming it's the last widget)
-            if self.layout().count() > 1:
-                 resize_hint_item = self.layout().itemAt(self.layout().count() - 1)
-                 if resize_hint_item and resize_hint_item.widget():
-                      available_height -= resize_hint_item.widget().height()
-
-            # Calculate available width for the grid
             available_width = self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right()
             
-            # Calculate button dimensions based on available space and grid layout
-            # We have 5 rows and 15 columns in the grid
+            # Account for other widgets in the layout
+            for i in range(self.layout().count()):
+                item = self.layout().itemAt(i)
+                if item and item.widget() and item.widget() != self:
+                    available_height -= (item.widget().height() + self.layout().spacing())
+
+            # Define grid dimensions
             num_rows = 5
             num_cols = 15
             
-            # Calculate button size to fit the available space
-            # Subtract grid spacing between rows and columns
+            # Calculate optimal button size based on available space
             button_height = (available_height - grid_layout.verticalSpacing() * (num_rows - 1)) / num_rows
             button_width = (available_width - grid_layout.horizontalSpacing() * (num_cols - 1)) / num_cols
             
-            # Use the smaller dimension to maintain square buttons (except for special buttons)
+            # Use the smaller dimension for square buttons
             button_size = min(button_height, button_width)
             
-            # Ensure a minimum button size based on font size but keep it small enough to fit
+            # Ensure minimum button size
             min_button_size = max(MIN_KB_FONT, int(self.font_size * 0.8))
             button_size = max(min_button_size, button_size)
             
-            # Calculate adjusted font size based on button size
-            # Scale font size proportionally to button size, with a higher minimum
-            adjusted_font_size = max(MIN_KB_FONT / 2, int(button_size * 0.45))
+            # Calculate font size for buttons - make the buttons as large as the current keyboard font allows,
+            # but never let them overflow their cell
+            target_font_size = min(self.font_size, int(button_size * 0.9))
+            target_font_size = max(MIN_KB_FONT, target_font_size)
+            adjusted_font_size = target_font_size
             
-            # Check if we have a stored pre-resize font size
+            # Font size management during resize operations
             has_pre_resize_font = hasattr(self, '_pre_resize_font_size') and self._pre_resize_font_size is not None
             
-            # During resize, use the pre-resize font size if available
             if in_resize_operation and has_pre_resize_font:
-                # Use the stored font size during resize
-                logger.debug(f"Using stored pre-resize font size: {self._pre_resize_font_size}")
+                # During resize, maintain the pre-resize font size
                 self.font_size = self._pre_resize_font_size
-            
-            # Only update the font size automatically if:
-            # 1. Not manually set (_manual_font_size flag is not set)
-            # 2. Not in the middle of a mouse resize operation
-            # 3. Not in a programmatic resize from the main window
-            elif (not hasattr(self, '_manual_font_size') or not self._manual_font_size) and not in_resize_operation and not in_programmatic_resize:
-                # Update the main font size property based on button size
-                new_font_size = max(MIN_KB_FONT, round(button_size * 0.9))
+                logger.debug(f"Using stored pre-resize font size: {self._pre_resize_font_size}")
+            elif not any([
+                # Skip automatic font adjustment if any of these conditions are true
+                hasattr(self, '_manual_font_size') and self._manual_font_size,
+                in_resize_operation,
+                in_programmatic_resize
+            ]):
+                # Calculate new font size with a more stable formula
+                # This reduces the likelihood of resize loops
+                new_font_size = max(MIN_KB_FONT, round(button_size * 0.85))
                 
-                # Use a larger threshold (8 points) to prevent oscillations and resize loops
-                if abs(new_font_size - self.font_size) > 8:
-                    logger.info(f"Updating font size from {self.font_size} to {new_font_size} based on button size {button_size}")
+                # Only enlarge the font automatically – never shrink it
+                if new_font_size > self.font_size:
+                    logger.info(f"Updating font size: {self.font_size} → {new_font_size} (button size: {button_size})")
                     
-                    # Store the current font size
+                    # Update font size in keyboard
                     self.font_size = new_font_size
                     
-                    # Use a simpler approach to update preferences - don't trigger another resize
+                    # Update font manager without triggering signals
                     try:
+                        # Update the font manager directly
+                        self.font_manager.current_keyboard_font_size = new_font_size
+                        
+                        # Update preferences without triggering another resize
                         from PySide6.QtWidgets import QApplication
                         app = QApplication.instance()
                         if app:
                             for widget in app.topLevelWidgets():
                                 if hasattr(widget, 'preferences'):
-                                    # Update preferences directly without triggering another resize
                                     widget.preferences["keyboard_font_size"] = new_font_size
                                     logger.info(f"Updated keyboard font size in preferences to {new_font_size}")
                                     break
                     except Exception as e:
                         logger.error(f"Error updating font size in preferences: {e}")
             else:
-                # Skip automatic adjustment during resize operations
+                # Log why we're skipping automatic adjustment
                 if in_resize_operation:
-                    logger.debug(f"Skipping automatic font size adjustment during resize operation")
+                    logger.debug(f"Skipping font size adjustment during resize operation")
                 elif in_programmatic_resize:
-                    logger.debug(f"Skipping automatic font size adjustment during programmatic resize")
+                    logger.debug(f"Skipping font size adjustment during programmatic resize")
                 else:
-                    logger.debug(f"Skipping automatic font size adjustment because font size was manually set to {self.font_size}")
+                    logger.debug(f"Skipping font size adjustment (manual font size: {self.font_size})")
 
             # Create font with better fallback strategy
             font = QFont(self.keyboard_font_family, adjusted_font_size)
@@ -713,8 +740,11 @@ class SinhalaKeyboard(QFrame):
             btn = QPushButton()
             
             # Set font directly with better fallback strategy
-            # Use a smaller font size for better rendering and compatibility
-            adjusted_font_size = max(int(button_size * 0.45), 10)
+            # Use consistent font sizing with the rest of the keyboard
+            adjusted_font_size = max(
+                MIN_KB_FONT,
+                min(self.font_size, int(button_size * 0.9))
+            )
             
             # Create font using the font manager
             try:
@@ -727,7 +757,7 @@ class SinhalaKeyboard(QFrame):
             except Exception as font_error:
                 logger.error(f"Error setting font for button: {font_error}")
                 # Use a system font as fallback
-                fallback_font = QFont("Arial", 12)
+                fallback_font = QFont("Arial", 20)
                 btn.setFont(fallback_font)
             
             # Set text after font is configured
@@ -1429,24 +1459,32 @@ class SinhalaKeyboard(QFrame):
         try:
             super().resizeEvent(event)
             
+            # Skip processing if the size hasn't actually changed
+            if event.size() == event.oldSize():
+                return
+                
             # Track resize frequency to detect and prevent loops
             import time
             current_time = time.time()
             time_since_last = current_time - self._last_resize_time
             self._last_resize_time = current_time
             
-            # Increment resize counter
-            if time_since_last < 0.5:  # If resizes are happening rapidly
+            # More efficient approach to detect and prevent resize loops
+            # Only increment counter for rapid resizes (less than 0.3 seconds apart)
+            if time_since_last < 0.3:
                 self._resize_count += 1
             else:
-                # Reset counter if enough time has passed
+                # Reset counter if enough time has passed between resizes
                 self._resize_count = 0
             
-            # Detect resize loops and break them - increased threshold to allow more resizes
-            if self._resize_count > 15:  # Reduced from 20 to catch loops earlier
-                print(f"WARNING: Detected resize loop! Count: {self._resize_count}, Time: {time_since_last:.3f}s")
+            # Break resize loops with a higher threshold to reduce false positives
+            if self._resize_count > 12:  # Increased from 8 to 12
+                logger.warning(f"Detected resize loop! Count: {self._resize_count}, Time: {time_since_last:.3f}s")
                 # Skip this resize to break the loop
                 self._resize_count = 0
+                # Force a delay before allowing more resize events
+                import time
+                time.sleep(0.1)  # Small delay to break the loop
                 return
                 
             # Skip if we're in a manual resize operation
@@ -1466,7 +1504,7 @@ class SinhalaKeyboard(QFrame):
                     for widget in app.topLevelWidgets():
                         if (widget.__class__.__name__ == "SinhalaWordApp" and 
                             hasattr(widget, '_kb_resize_state') and 
-                            widget._kb_resize_state == widget.ResizeState.PROGRAMMATIC):
+                            widget._kb_resize_state == ResizeState.PROGRAMMATIC):
                             # Skip updates during programmatic resize from main window
                             event.accept()
                             return
@@ -1606,8 +1644,23 @@ class SinhalaKeyboard(QFrame):
         self.initial_mouse_pos = None
         self.initial_height = None
         self._resize_count = 0
-        self._resize_signal_counter = 0
+        
+        # Reset signal counter if it exists
+        if hasattr(self, '_resize_signal_counter'):
+            self._resize_signal_counter = 0
+            
+        # Reset last emitted height to current height to prevent immediate re-emission
+        if hasattr(self, '_last_emitted_height'):
+            try:
+                self._last_emitted_height = self.height()
+            except Exception:
+                pass
+                
+        # Reset cursor
         self.setCursor(Qt.ArrowCursor)
+        
+        # Log the reset for debugging
+        logger.debug("Reset resize state variables")
         
     def _set_main_window_resize_state(self, state):
         """Helper method to set the resize state in the main window"""
@@ -1625,6 +1678,7 @@ class SinhalaKeyboard(QFrame):
                     
                     # Also set the manual resize flag if it exists
                     if hasattr(widget, '_manual_resize'):
+                        # Check if state is the USER enum value
                         widget._manual_resize = (state == ResizeState.USER)
                     
                     break
@@ -1649,8 +1703,8 @@ class SinhalaKeyboard(QFrame):
                 # Calculate new height based on resize direction using global mouse position
                 delta = event.globalPosition().y() - self.initial_mouse_pos
                 
-                # Use a reasonable minimum height (120px) instead of widget's minimumHeight
-                min_height = 120  # Minimum reasonable height for usability
+                # Use a reasonable minimum height for usability
+                min_height = 150  # Increased minimum height for better usability
                 
                 if self.resize_direction == "top":
                     # When dragging from top, invert the delta (drag down = smaller)
@@ -1659,19 +1713,19 @@ class SinhalaKeyboard(QFrame):
                     # For bottom edge: dragging up (negative delta) should make it smaller
                     new_height = max(min_height, self.initial_height + delta)
                 
-                # Add a reasonable maximum height limit (80% of screen height if available)
+                # Add a reasonable maximum height limit (70% of screen height)
                 try:
                     screen = self.screen()
                     if screen:
                         screen_height = screen.availableGeometry().height()
-                        max_height = int(screen_height * 0.8)
+                        max_height = int(screen_height * 0.7)  # Reduced from 80% to 70%
                         new_height = min(new_height, max_height)
                 except Exception as screen_error:
                     logger.error(f"Error getting screen info: {screen_error}")
-                    # Fallback to a reasonable maximum if screen info not available
+                    # Fallback to a reasonable maximum
                     new_height = min(new_height, 800)
                 
-                # Find the main window to set manual resize flag
+                # Find the main window to set resize state
                 from PySide6.QtWidgets import QApplication
                 app = QApplication.instance()
                 main_window = None
@@ -1680,50 +1734,49 @@ class SinhalaKeyboard(QFrame):
                         main_window = widget
                         break
                 
-                # Set the resize state in the main window to USER to prevent automatic adjustments
+                # Set the resize state in the main window to USER
                 if main_window and hasattr(main_window, '_kb_resize_state'):
-                    main_window._kb_resize_state = main_window.ResizeState.USER
+                    main_window._kb_resize_state = ResizeState.USER
                 
-                # Use a larger threshold (20px) to prevent too frequent updates during resize
-                # This is critical to prevent the rubber band effect
-                threshold = 20
+                # Use a larger threshold to prevent too frequent updates during resize
+                # Significantly increased threshold for smoother resizing
+                threshold = 40  # Increased from 25 to 40
                 
                 # Only process resize if the height has changed significantly
                 if not hasattr(self, '_last_emitted_height') or abs(new_height - self._last_emitted_height) > threshold:
                     # Store the height we're about to emit
                     self._last_emitted_height = new_height
                     
-                    # Set flag to prevent automatic font size adjustment during update_buttons
+                    # Set flag to prevent automatic font size adjustment during resize
                     self._manual_font_size = True
                     
                     # Store the current font size to maintain it during resize
                     if not hasattr(self, '_pre_resize_font_size') or self._pre_resize_font_size is None:
                         self._pre_resize_font_size = self.font_size
                     
-                    # Resize the widget without fixing the height - do this AFTER setting flags
+                    # Resize the widget - do this AFTER setting flags
                     self.resize(self.width(), new_height)
                     
-                    # Emit the resize signal to ensure parent containers update
-                    # But only do this occasionally to prevent feedback loops
-                    # Use a counter to limit signal emission frequency
+                    # Emit the resize signal with reduced frequency
+                    # Initialize counter if needed
                     if not hasattr(self, '_resize_signal_counter'):
                         self._resize_signal_counter = 0
                     
                     self._resize_signal_counter += 1
-                    if self._resize_signal_counter % 5 == 0:  # Only emit every 5th resize (reduced frequency)
+                    
+                    # Further reduced emission frequency (every 12th resize instead of 8th)
+                    # This helps prevent resize loops and improves performance
+                    if self._resize_signal_counter % 12 == 0:  # Increased from 8 to 12
                         # Temporarily block signals to prevent feedback loops
                         old_block_state = self.blockSignals(True)
                         self.keyboardResized.emit(new_height)
                         self.blockSignals(old_block_state)
-                
-                # Don't update the initial mouse position for continuous dragging
-                # This prevents accumulating small errors that can cause jitter
-                # Instead, use the original position and recalculate the delta each time
+                        logger.debug(f"Emitted resize signal: height={new_height}")
                 
                 # Accept the event to prevent it from being propagated
                 event.accept()
         except Exception as e:
-            print(f"Error in mouseMoveEvent: {e}")
+            logger.error(f"Error in mouseMoveEvent: {e}")
             # Reset resize state to prevent getting stuck
             self.resize_in_progress = False
             self.setCursor(Qt.ArrowCursor)
@@ -1759,10 +1812,10 @@ class SinhalaKeyboard(QFrame):
                         if main_window:
                             # Set the resize state to PROGRAMMATIC to prevent feedback loops
                             if hasattr(main_window, '_kb_resize_state'):
-                                main_window._kb_resize_state = main_window.ResizeState.PROGRAMMATIC
+                                main_window._kb_resize_state = ResizeState.PROGRAMMATIC
                             
                             # Calculate a new font size based on the keyboard height
-                            current_font_size = main_window.preferences.get("keyboard_font_size", 26)
+                            current_font_size = main_window.preferences.get("keyboard_font_size", 20)
                             
                             # Calculate new font size proportional to height
                             # Use the standard minimum font size for better visibility
@@ -1798,18 +1851,13 @@ class SinhalaKeyboard(QFrame):
                 except Exception as height_error:
                     print(f"Error getting final height: {height_error}")
                 
-                # Reset resize state
-                self.resize_in_progress = False
-                self.resize_direction = None
-                self.initial_mouse_pos = None
-                self.initial_height = None
-                self._resize_count = 0
-                self.setCursor(Qt.ArrowCursor)
+                # Reset resize state - use a more comprehensive reset
+                self._reset_resize_state()  # Use the dedicated method for consistency
                 
                 # Add a small delay before resetting the resize state in the main window
                 # This helps prevent race conditions
                 import time
-                time.sleep(0.1)
+                time.sleep(0.15)  # Increased from 0.1 to 0.15 for better stability
                 
                 # Reset the resize state in the main window back to IDLE
                 try:
@@ -1817,7 +1865,7 @@ class SinhalaKeyboard(QFrame):
                     app = QApplication.instance()
                     for widget in app.topLevelWidgets():
                         if widget.__class__.__name__ == "SinhalaWordApp" and hasattr(widget, '_kb_resize_state'):
-                            widget._kb_resize_state = widget.ResizeState.IDLE
+                            widget._kb_resize_state = ResizeState.IDLE
                             break
                 except Exception as e:
                     print(f"Error resetting main window resize state: {e}")

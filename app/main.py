@@ -137,13 +137,11 @@ def _phonetic_global(word: str) -> str:
 # ------------------------------------------------------------------
 from enum import Enum
 
-# Constants for font size limits - must match keyboard.py
-MIN_KB_FONT = 26  # Minimum keyboard font size (increased from 10 for better visibility)
-MAX_KB_FONT = 200  # Maximum keyboard font size
-
-# Standard base values for height/font calculations
-BASE_KB_HEIGHT = 264  # Base keyboard height
-BASE_KB_FONT = 26    # Base font size corresponding to the base height
+# Import constants
+from ui.constants import (
+    MIN_KB_FONT, MAX_KB_FONT, BASE_KB_HEIGHT, BASE_KB_FONT, 
+    DEFAULT_KB_FONT_SIZE, DEFAULT_FONT_SIZE
+)
 
 class ResizeState(Enum):
     IDLE = 0
@@ -263,14 +261,12 @@ class SinhalaWordApp(QMainWindow):
         # Initialize with dark mode based on current theme and default font size
         is_dark_mode = self.theme_manager.is_dark_mode()
         
-        # Use a larger default font size for better visibility
-        default_kb_font = 60  # Default to 60 if not set (larger than MIN_KB_FONT for better visibility)
-        keyboard_font_size = self.preferences.get("keyboard_font_size", default_kb_font)
+        # Get keyboard font size from preferences or use default
+        keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
         
-        # Create the keyboard with the current theme and font size
-        # First, ensure we have a valid font size
+        # Ensure the font size is within valid range
         if keyboard_font_size < MIN_KB_FONT or keyboard_font_size > MAX_KB_FONT:
-            keyboard_font_size = default_kb_font  # Reset to default if invalid
+            keyboard_font_size = DEFAULT_KB_FONT_SIZE
             self.preferences["keyboard_font_size"] = keyboard_font_size  # Update preferences
             logging.warning(f"Invalid keyboard font size detected, reset to {keyboard_font_size}")
 
@@ -1310,8 +1306,8 @@ class SinhalaWordApp(QMainWindow):
     def reset_keyboard_size(self):
         """Reset the keyboard to its default size."""
         try:
-            # Use a larger default font size for better visibility
-            default_font_size = 60
+            # Use the default keyboard font size from constants
+            default_font_size = DEFAULT_KB_FONT_SIZE
             
             # Calculate default height based on the font size using standard base values
             default_height = int((default_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
@@ -1338,7 +1334,7 @@ class SinhalaWordApp(QMainWindow):
             self.keyboard_container.updateGeometry()
             self.updateGeometry()
             
-            # Reset keyboard font size to default (already defined above)
+            # Reset keyboard font size to default
             if hasattr(self.keyboard_area, 'set_font_size'):
                 self.keyboard_area.set_font_size(default_font_size)
                 self.preferences["keyboard_font_size"] = default_font_size
@@ -1368,6 +1364,9 @@ class SinhalaWordApp(QMainWindow):
                 logger.debug("Skipping automatic font-calc during a user-initiated resize.")
                 return
                 
+            # Update font manager - this is the single source of truth
+            self.font_manager.set_keyboard_font_size(size)
+            
             # Update preferences
             self.preferences["keyboard_font_size"] = size
             
@@ -1382,11 +1381,8 @@ class SinhalaWordApp(QMainWindow):
                 
                 # Only adjust height if we're not in a manual resize operation
                 if not keyboard_in_manual_resize:
-                    # Calculate appropriate height based on font size
-                    # This is the inverse of the calculation in the keyboard's mouseReleaseEvent
-                    base_height = 264
-                    base_font_size = 26
-                    calculated_height = int((size / base_font_size) * base_height)
+                    # Calculate appropriate height based on font size using constants from FontManager
+                    calculated_height = int((size / BASE_KB_FONT) * BASE_KB_HEIGHT)
                     
                     # Set a flag to prevent automatic font size adjustment during resize
                     if hasattr(self.keyboard_area, '_manual_font_size'):
@@ -2135,8 +2131,21 @@ class SinhalaWordApp(QMainWindow):
         # Add keyboard font size submenu
         keyboard_font_menu = QMenu("Keyboard Font Size", self)
         
-        # Add font size options - use larger sizes for better visibility
-        for size in [30, 40, 50, 60, 70, 80, 90]:
+        # Add font size options based on constants
+        # Start with the default size
+        default_action = QAction(f"{DEFAULT_KB_FONT_SIZE}pt (Default)", self)
+        default_action.triggered.connect(lambda checked: self.set_keyboard_font_size(DEFAULT_KB_FONT_SIZE))
+        keyboard_font_menu.addAction(default_action)
+        
+        # Add separator
+        keyboard_font_menu.addSeparator()
+        
+        # Add other size options
+        for size in [MIN_KB_FONT, 30, 35, 40, 45, 50, 60, 70, 80]:
+            # Skip the default size as it's already added
+            if size == DEFAULT_KB_FONT_SIZE:
+                continue
+                
             action = QAction(f"{size}pt", self)
             action.triggered.connect(lambda checked, s=size: self.set_keyboard_font_size(s))
             keyboard_font_menu.addAction(action)

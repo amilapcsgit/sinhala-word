@@ -8,6 +8,12 @@ import os
 import logging
 from PySide6.QtGui import QFont, QFontDatabase
 
+# Import constants
+from ui.constants import (
+    MIN_KB_FONT, MAX_KB_FONT, BASE_KB_HEIGHT, BASE_KB_FONT,
+    MIN_FONT_SIZE, MAX_FONT_SIZE, DEFAULT_KB_FONT_SIZE, DEFAULT_FONT_SIZE
+)
+
 # Set up logging
 logger = logging.getLogger("FontManager")
 
@@ -56,16 +62,8 @@ class FontManager:
         
         # Current font selections
         self.current_font = None
-        self.current_font_size = 14
-        self.current_keyboard_font_size = 26
-        
-        # Font size constants
-        self.MIN_FONT_SIZE = 8
-        self.MAX_FONT_SIZE = 72
-        self.MIN_KB_FONT = 26
-        self.MAX_KB_FONT = 200
-        self.BASE_KB_HEIGHT = 264
-        self.BASE_KB_FONT = 26
+        self.current_font_size = DEFAULT_FONT_SIZE
+        self.current_keyboard_font_size = DEFAULT_KB_FONT_SIZE
         
         # Available font sizes
         self.font_sizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
@@ -194,7 +192,7 @@ class FontManager:
             size = self.current_keyboard_font_size
             
         # Ensure size is within valid range for keyboard
-        size = max(self.MIN_KB_FONT, min(self.MAX_KB_FONT, size))
+        size = max(MIN_KB_FONT, min(MAX_KB_FONT, size))
             
         font = QFont(self.current_font, size)
         font.setStyleStrategy(strategy)
@@ -229,7 +227,7 @@ class FontManager:
             int: The actual font size set (may be clamped to valid range).
         """
         # Ensure size is within valid range
-        size = max(self.MIN_FONT_SIZE, min(self.MAX_FONT_SIZE, size))
+        size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
         self.current_font_size = size
         logger.info(f"Font size set to: {size}")
         return size
@@ -245,7 +243,7 @@ class FontManager:
             int: The actual font size set (may be clamped to valid range).
         """
         # Ensure size is within valid range for keyboard
-        size = max(self.MIN_KB_FONT, min(self.MAX_KB_FONT, size))
+        size = max(MIN_KB_FONT, min(MAX_KB_FONT, size))
         self.current_keyboard_font_size = size
         logger.info(f"Keyboard font size set to: {size}")
         return size
@@ -261,9 +259,9 @@ class FontManager:
             int: The calculated font size.
         """
         # Calculate proportional font size based on height
-        font_size = int(self.BASE_KB_FONT * (height / self.BASE_KB_HEIGHT))
+        font_size = int(BASE_KB_FONT * (height / BASE_KB_HEIGHT))
         # Ensure it's within valid range
-        font_size = max(self.MIN_KB_FONT, min(self.MAX_KB_FONT, font_size))
+        font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, font_size))
         return font_size
     
     def update_from_preferences(self, preferences):

@@ -1,16 +1,16 @@
 {
     "theme": "dark",
-    "font": "AF Sigiri",
-    "font_size": 72,
+    "font": "UN-Bindumathi",
+    "font_size": 28,
     "window_size": [
         1728,
-        1009
+        1044
     ],
     "show_keyboard": true,
     "show_suggestions": true,
-    "singlish_enabled": false,
+    "singlish_enabled": true,
     "recent_files": [],
     "keyboard_font_size": 44,
-    "keyboard_height": 489,
+    "keyboard_height": 609,
     "keyboard_detached": true
 }

@@ -172,8 +172,12 @@ def _phonetic_global(word: str) -> str:
 from enum import Enum
 
 # Constants for font size limits - must match keyboard.py
-MIN_KB_FONT = 10  # Minimum keyboard font size
+MIN_KB_FONT = 26  # Minimum keyboard font size (increased from 10 for better visibility)
 MAX_KB_FONT = 200  # Maximum keyboard font size
+
+# Standard base values for height/font calculations
+BASE_KB_HEIGHT = 264  # Base keyboard height
+BASE_KB_FONT = 26    # Base font size corresponding to the base height
 
 class ResizeState(Enum):
     IDLE = 0
@@ -333,12 +337,13 @@ class SinhalaWordApp(QMainWindow):
         is_dark_mode = self.theme_manager.is_dark_mode()
         
         # Use a larger default font size for better visibility
-        keyboard_font_size = self.preferences.get("keyboard_font_size", 60)  # Default to 60 if not set
+        default_kb_font = 60  # Default to 60 if not set (larger than MIN_KB_FONT for better visibility)
+        keyboard_font_size = self.preferences.get("keyboard_font_size", default_kb_font)
         
         # Create the keyboard with the current theme and font size
         # First, ensure we have a valid font size
-        if keyboard_font_size <= 0 or keyboard_font_size > 200:
-            keyboard_font_size = 60  # Reset to default if invalid
+        if keyboard_font_size < MIN_KB_FONT or keyboard_font_size > MAX_KB_FONT:
+            keyboard_font_size = default_kb_font  # Reset to default if invalid
             self.preferences["keyboard_font_size"] = keyboard_font_size  # Update preferences
             logging.warning(f"Invalid keyboard font size detected, reset to {keyboard_font_size}")
 
@@ -350,10 +355,9 @@ class SinhalaWordApp(QMainWindow):
             # Connect the key press signal
             self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
 
-            # Calculate appropriate height based on font size
-            base_height = 600  # Increased base height for better visibility
-            base_font_size = 60  # Increased base font size
-            calculated_height = max(400, int((keyboard_font_size / base_font_size) * base_height))
+            # Calculate appropriate height based on font size using the standard base values
+            # Use a minimum height of 400px for better visibility
+            calculated_height = max(400, int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT))
             
             # Ensure the keyboard has a reasonable size before we start
             # Use the calculated height based on font size, with a minimum of 400px
@@ -1030,13 +1034,11 @@ class SinhalaWordApp(QMainWindow):
                 if not keyboard_in_manual_resize:
                     # Calculate a new font size based on the keyboard height
                     # This ensures the font size is proportional to the keyboard height
-                    # Base calculation: default height 264px corresponds to font size 26
-                    base_height = 264
-                    base_font_size = 26
-                    current_font_size = self.preferences.get("keyboard_font_size", base_font_size)
+                    # Use the standard base values for consistent scaling
+                    current_font_size = self.preferences.get("keyboard_font_size", BASE_KB_FONT)
                     
                     # Calculate new font size proportional to height and round to nearest integer
-                    new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(base_font_size * new_height / base_height)))
+                    new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(BASE_KB_FONT * new_height / BASE_KB_HEIGHT)))
                     
                     # Only update if the integer value has changed significantly (more than 2 points)
                     # This prevents small oscillations that can cause resize loops
@@ -1380,10 +1382,14 @@ class SinhalaWordApp(QMainWindow):
     def reset_keyboard_size(self):
         """Reset the keyboard to its default size."""
         try:
-            # Default keyboard height
-            default_height = 600  # Increased default height for better visibility
+            # Use a larger default font size for better visibility
+            default_font_size = 60
             
-            # We no longer set minimum height constraints to allow more flexibility
+            # Calculate default height based on the font size using standard base values
+            default_height = int((default_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
+            
+            # Ensure a minimum height for better visibility
+            default_height = max(400, default_height)
             
             # Use resize instead of setFixedHeight to allow future resizing
             self.keyboard_area.resize(self.keyboard_area.width(), default_height)
@@ -1404,8 +1410,7 @@ class SinhalaWordApp(QMainWindow):
             self.keyboard_container.updateGeometry()
             self.updateGeometry()
             
-            # Reset keyboard font size to default
-            default_font_size = 60
+            # Reset keyboard font size to default (already defined above)
             if hasattr(self.keyboard_area, 'set_font_size'):
                 self.keyboard_area.set_font_size(default_font_size)
                 self.preferences["keyboard_font_size"] = default_font_size
@@ -2191,7 +2196,7 @@ class SinhalaWordApp(QMainWindow):
         keyboard_font_menu = QMenu("Keyboard Font Size", self)
         
         # Add font size options - use larger sizes for better visibility
-        for size in [40, 50, 60, 70, 80]:
+        for size in [30, 40, 50, 60, 70, 80, 90]:
             action = QAction(f"{size}pt", self)
             action.triggered.connect(lambda checked, s=size: self.set_keyboard_font_size(s))
             keyboard_font_menu.addAction(action)
@@ -2570,20 +2575,27 @@ class SinhalaWordApp(QMainWindow):
 
             # Handle alphanumeric keys: append to buffer
             if text.isalnum() and len(text) == 1:
+                # Get current cursor position before any operations
+                current_pos = self.editor.textCursor().position()
+                
                 # Verify cursor position is where we expect it to be if buffer is not empty
                 if self.buffer and self.word_start_pos is not None:
-                    current_pos = self.editor.textCursor().position()
                     expected_pos = self.word_start_pos + len(self.buffer)
                     
                     # If cursor is not where expected, commit buffer and start a new one
                     if current_pos != expected_pos:
                         logger.info(f"Cursor position mismatch: expected {expected_pos}, got {current_pos} - committing buffer")
                         self.commit_buffer()
-                        self.word_start_pos = self.editor.textCursor().position()
+                        # Set word_start_pos to current position AFTER committing buffer
+                        self.word_start_pos = current_pos
                 
-                if not self.buffer: # If buffer was empty, mark the start position
-                     self.word_start_pos = self.editor.textCursor().position()
+                # If buffer was empty, mark the start position
+                # This needs to happen AFTER any potential buffer commit
+                if not self.buffer:
+                    self.word_start_pos = current_pos
+                    logger.info(f"Starting new buffer at position {current_pos}")
                      
+                # Now append to buffer
                 self.buffer.append(text)
                 
                 # Update suggestions immediately after adding to buffer
@@ -2592,8 +2604,11 @@ class SinhalaWordApp(QMainWindow):
                     if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
                         self._suggestion_timer.stop()
                     
-                    # Update suggestions immediately
-                    self.update_suggestion_area()
+                    # Use a very short timer to ensure cursor position is stable
+                    self._suggestion_timer = QTimer()
+                    self._suggestion_timer.setSingleShot(True)
+                    self._suggestion_timer.timeout.connect(self.update_suggestion_area)
+                    self._suggestion_timer.start(10)  # Very short delay to avoid race conditions
                 
                 # Do NOT consume the event, let the editor insert the character
                 return False
@@ -2693,10 +2708,20 @@ class SinhalaWordApp(QMainWindow):
                 self.suggestion_popup.hide()
                 return
             
-            # If buffer is empty, hide suggestion popup
-            if not self.buffer:
-                logger.info("Buffer is empty, hiding suggestion popup")
+            # If buffer is empty or word_start_pos is None, hide suggestion popup
+            if not self.buffer or self.word_start_pos is None:
+                logger.info("Buffer is empty or word_start_pos is None, hiding suggestion popup")
                 self.suggestion_popup.hide()
+                return
+            
+            # Verify cursor position is still valid for this buffer
+            current_pos = self.editor.textCursor().position()
+            expected_pos = self.word_start_pos + len(self.buffer)
+            
+            # If cursor has moved away from where we expect it, don't update suggestions
+            if current_pos != expected_pos:
+                logger.info(f"Cursor position mismatch in update_suggestion_area: expected {expected_pos}, got {current_pos}")
+                # Don't update suggestions if cursor is not where expected
                 return
                 
             current_word = "".join(self.buffer).lower()
@@ -2731,8 +2756,8 @@ class SinhalaWordApp(QMainWindow):
             
             # Show the popup with suggestions
             if self.current_suggestions:
-                # Make sure the editor keeps focus
-                self.editor.setFocus()
+                # Save current cursor position
+                saved_position = cursor.position()
                 
                 # Show the popup with suggestions
                 self.suggestion_popup.show_popup(
@@ -2742,7 +2767,8 @@ class SinhalaWordApp(QMainWindow):
                 )
                 
                 # Make sure the editor still has focus after showing popup
-                QTimer.singleShot(10, self.editor.setFocus)
+                # But don't change the cursor position
+                self.editor.setFocus()
                 
                 logger.info(f"Showing suggestion popup with {len(self.current_suggestions)} suggestions")
             else:
@@ -2757,6 +2783,7 @@ class SinhalaWordApp(QMainWindow):
             logger.error(f"Traceback: {traceback.format_exc()}")
             
             # Hide the popup in case of error
+            self.suggestion_popup.hide()
             self.suggestion_popup.hide()
 
     def clear_suggestion_area(self):
@@ -2870,7 +2897,7 @@ class SinhalaWordApp(QMainWindow):
                 return
 
             word = "".join(self.buffer)
-            logger.info(f"Committing buffer: '{word}'")
+            logger.info(f"Committing buffer: '{word}' at position {self.word_start_pos}")
 
             # Use the transliterator to get the Sinhala word
             sinhala_word = self.transliterator.transliterate(word)
@@ -2880,18 +2907,42 @@ class SinhalaWordApp(QMainWindow):
                 
             logger.info(f"Transliterated to: '{sinhala_word}'")
 
-            cur = self.editor.textCursor()
-            cur.beginEditBlock()
-
-            # Move cursor to the start of the buffered word
-            cur.setPosition(self.word_start_pos)
-            # Select the buffered text
-            cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
-            # Remove the buffered text
-            cur.removeSelectedText()
-            # Insert the transliterated Sinhala word
-            cur.insertText(sinhala_word)
-            cur.endEditBlock()
+            # Get the document and create a cursor for verification
+            doc = self.editor.document()
+            check_cursor = QTextCursor(doc)
+            check_cursor.setPosition(self.word_start_pos)
+            
+            # Verify the position is valid
+            if self.word_start_pos >= 0 and self.word_start_pos < doc.characterCount():
+                # Try to select the text that should match our buffer
+                check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
+                actual_text = check_cursor.selectedText()
+                
+                # Verify the text matches our buffer before replacing
+                if actual_text == word:
+                    # Text matches, do standard replacement
+                    cur = self.editor.textCursor()
+                    cur.beginEditBlock()
+                    
+                    # Save the current position to restore it later if needed
+                    original_position = cur.position()
+                    
+                    # Move cursor to the start of the buffered word
+                    cur.setPosition(self.word_start_pos)
+                    # Select the buffered text
+                    cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
+                    # Remove the buffered text
+                    cur.removeSelectedText()
+                    # Insert the transliterated Sinhala word
+                    cur.insertText(sinhala_word)
+                    cur.endEditBlock()
+                    
+                    logger.info(f"Successfully replaced '{word}' with '{sinhala_word}'")
+                else:
+                    # Text doesn't match buffer - log the mismatch
+                    logger.warning(f"Buffer text '{word}' doesn't match document text '{actual_text}' - skipping replacement")
+            else:
+                logger.warning(f"Invalid word_start_pos: {self.word_start_pos} (document length: {doc.characterCount()})")
 
             # Clear the buffer and reset word_start_pos
             self.buffer.clear()
@@ -2899,6 +2950,8 @@ class SinhalaWordApp(QMainWindow):
             
         except Exception as e:
             logger.error(f"Error in commit_buffer: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             # Reset state on error
             self.buffer.clear()
             self.word_start_pos = None

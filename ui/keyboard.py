@@ -9,8 +9,12 @@ os.environ["QT_FONT_NO_SYSTEM_FALLBACKS"] = "0"
 logger = logging.getLogger(__name__)
 
 # Constants for font size limits
-MIN_KB_FONT = 10  # Minimum keyboard font size
+MIN_KB_FONT = 26  # Minimum keyboard font size (increased from 10 for better visibility)
 MAX_KB_FONT = 200  # Maximum keyboard font size
+
+# Standard base values for height/font calculations
+BASE_KB_HEIGHT = 264  # Base keyboard height
+BASE_KB_FONT = 26    # Base font size corresponding to the base height
 
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QWidget, 
                           QSizePolicy, QDialog, QLabel, QGridLayout, QSplitter)
@@ -399,8 +403,8 @@ class SinhalaKeyboard(QFrame):
             logger.debug(f"Calculated button size: {button_size}px (font: {self.font_size}, available height: {available_height}px, width: {available_width}px)")
 
             # Calculate adjusted font size based on button size
-            # Scale font size proportionally to button size
-            adjusted_font_size = max(10, int(button_size * 0.45))
+            # Scale font size proportionally to button size, with a higher minimum
+            adjusted_font_size = max(MIN_KB_FONT / 2, int(button_size * 0.45))
             
             # Check if we're in the middle of a mouse resize operation
             in_resize_operation = hasattr(self, 'resize_in_progress') and self.resize_in_progress
@@ -1643,14 +1647,11 @@ class SinhalaKeyboard(QFrame):
                             # Calculate a new font size based on the keyboard height
                             current_font_size = main_window.preferences.get("keyboard_font_size", 26)
                             
-                            # Base calculation: default height 264px corresponds to font size 26
-                            base_height = 264
-                            base_font_size = 26
+                            # Use the standard base values for consistent scaling
                             
                             # Calculate new font size proportional to height
-                            # smallest readable size that still renders well on all tested platforms
-                            MIN_KB_FONT = 10
-                            new_font_size = max(MIN_KB_FONT, min(200, round(base_font_size * current_height / base_height)))
+                            # Use the standard minimum font size for better visibility
+                            new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(BASE_KB_FONT * current_height / BASE_KB_HEIGHT)))
                             
                             # Only update if the integer value has changed significantly
                             if abs(new_font_size - int(current_font_size)) > 2:

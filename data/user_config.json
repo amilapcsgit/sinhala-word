@@ -1,7 +1,7 @@
 {
     "theme": "dark",
     "font": "UN-Bindumathi",
-    "font_size": 28,
+    "font_size": 24,
     "window_size": [
         1728,
         1044
@@ -10,7 +10,7 @@
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [],
-    "keyboard_font_size": 44,
+    "keyboard_font_size": 60,
     "keyboard_height": 609,
     "keyboard_detached": true
 }

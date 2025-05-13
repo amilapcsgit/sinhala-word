@@ -864,6 +864,11 @@ class SinhalaWordApp(QMainWindow):
             if new_height <= 0:
                 logger.warning(f"Ignoring invalid keyboard height: {new_height}")
                 return
+            
+            # Check if this is a duplicate resize (same height as before)
+            if hasattr(self, '_last_keyboard_height') and abs(self._last_keyboard_height - new_height) < 5:
+                logger.debug(f"Ignoring small height change: {self._last_keyboard_height} -> {new_height}")
+                return
                 
             # Store the pending height
             self._pending_keyboard_height = new_height
@@ -874,8 +879,9 @@ class SinhalaWordApp(QMainWindow):
                 self._keyboard_resize_timer.setSingleShot(True)
                 self._keyboard_resize_timer.timeout.connect(self._process_keyboard_resize)
 
-            # Restart the timer with a short delay (e.g., 50ms)
-            self._keyboard_resize_timer.start(50)
+            # Use a longer debounce delay (150ms) to reduce resize frequency
+            # This is critical to prevent the rubber band effect
+            self._keyboard_resize_timer.start(150)
 
             logger.debug(f"Keyboard resize signal received, pending height: {new_height}")
 
@@ -945,17 +951,22 @@ class SinhalaWordApp(QMainWindow):
     def _process_keyboard_resize(self):
         """Process the pending keyboard resize after the debounce timer times out."""
         try:
-            # Check if we're in a user-initiated resize - if so, skip automatic resizing
+            # Skip processing if any of these conditions are true:
+            # 1. User is manually resizing the keyboard
+            # 2. Keyboard is in a resize operation
+            # 3. Keyboard has manual font size flag set
+            
+            # Check if we're in a user-initiated resize
             if hasattr(self, '_kb_resize_state') and self._kb_resize_state == ResizeState.USER:
                 logger.debug("Skipping automatic resize as we're in a user-initiated resize operation")
                 return
                 
-            # Also check if the keyboard is in a manual resize operation
+            # Check if the keyboard is in a manual resize operation
             if hasattr(self.keyboard_area, 'resize_in_progress') and self.keyboard_area.resize_in_progress:
                 logger.debug("Skipping automatic resize as keyboard is in a manual resize operation")
                 return
                 
-            # Also check if the keyboard has the manual font size flag set
+            # Check if the keyboard has the manual font size flag set
             if hasattr(self.keyboard_area, '_manual_font_size') and self.keyboard_area._manual_font_size:
                 logger.debug("Skipping automatic resize as keyboard has manual font size flag set")
                 return
@@ -967,17 +978,13 @@ class SinhalaWordApp(QMainWindow):
             if new_height is None:
                 return # No pending resize
                 
-            # Check for resize loops
+            # Check for resize loops with a simpler approach
             import time
             current_time = time.time()
-            if current_time - self._last_resize_time < 1.0:  # Within 1 second
-                self._resize_count += 1
-                if self._resize_count > 10:
-                    logger.warning(f"Detected resize loop! Count: {self._resize_count}, Time: {current_time - self._last_resize_time:.3f}s")
-                    self._resize_count = 0  # Reset counter
-                    return  # Skip this resize to break the loop
-            else:
-                self._resize_count = 0  # Reset counter
+            if hasattr(self, '_last_resize_time') and current_time - self._last_resize_time < 0.2:
+                # If resizes are happening too quickly, skip this one
+                logger.debug("Skipping resize - too soon after previous resize")
+                return
                 
             self._last_resize_time = current_time
 
@@ -989,8 +996,8 @@ class SinhalaWordApp(QMainWindow):
                 return
 
             # Check if this is a duplicate resize (same height as before)
-            if hasattr(self, '_last_keyboard_height') and self._last_keyboard_height == new_height:
-                logger.debug(f"Skipping duplicate processed resize to same height: {new_height}")
+            if hasattr(self, '_last_keyboard_height') and abs(self._last_keyboard_height - new_height) < 5:
+                logger.debug(f"Skipping resize - height change too small: {self._last_keyboard_height} -> {new_height}")
                 return
 
             # Store the height for future comparison
@@ -1021,10 +1028,6 @@ class SinhalaWordApp(QMainWindow):
                     if hasattr(self, 'keyboard_area'):
                         self.keyboard_area.resize(self.keyboard_area.width(), new_height)
     
-                # Update the buttons to match the new size
-                if hasattr(self.keyboard_area, 'update_buttons'):
-                    self.keyboard_area.update_buttons()
-                    
                 # Check if the keyboard is in a manual resize operation
                 # If so, we should respect its current font size
                 keyboard_in_manual_resize = (hasattr(self.keyboard_area, '_manual_font_size') and 
@@ -1033,29 +1036,19 @@ class SinhalaWordApp(QMainWindow):
                 # Only adjust font size if not in a manual resize operation
                 if not keyboard_in_manual_resize:
                     # Calculate a new font size based on the keyboard height
-                    # This ensures the font size is proportional to the keyboard height
-                    # Use the standard base values for consistent scaling
                     current_font_size = self.preferences.get("keyboard_font_size", BASE_KB_FONT)
                     
                     # Calculate new font size proportional to height and round to nearest integer
                     new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(BASE_KB_FONT * new_height / BASE_KB_HEIGHT)))
                     
-                    # Only update if the integer value has changed significantly (more than 2 points)
-                    # This prevents small oscillations that can cause resize loops
+                    # Only update if the integer value has changed significantly
                     if abs(new_font_size - current_font_size) > 2:
                         logger.info(f"Adjusting keyboard font size from {current_font_size} to {new_font_size} based on height {new_height}")
-                        # Update the font size without triggering another resize
-                        self._manual_resize = True
                         self.preferences["keyboard_font_size"] = new_font_size
                         
-                        # Update the keyboard font size directly without calling set_font_size
-                        # to avoid triggering another resize
-                        if hasattr(self.keyboard_area, 'font_size'):
-                            self.keyboard_area.font_size = new_font_size
-                            
-                        # Update the buttons again with the new font size
-                        if hasattr(self.keyboard_area, 'update_buttons'):
-                            self.keyboard_area.update_buttons()
+                        # Update the keyboard font size using the proper method
+                        if hasattr(self.keyboard_area, 'set_font_size'):
+                            self.keyboard_area.set_font_size(new_font_size)
                 else:
                     # We're in a manual resize operation, so respect the keyboard's current font size
                     logger.info(f"Skipping font size adjustment during manual keyboard resize")
@@ -1533,7 +1526,7 @@ class SinhalaWordApp(QMainWindow):
         self.preferences["font"] = font_name
         config.save_user_preferences(self.preferences)
         
-    def change_font_size(self, size_text):
+    def change_editor_font_size(self, size_text):
         """Change the font size for the editor."""
         try:
             # Convert size text to float
@@ -1684,7 +1677,7 @@ class SinhalaWordApp(QMainWindow):
         self.size_combo.setItemDelegate(FontSizeDelegate(self.size_combo))
 
         # Connect size change signals
-        self.size_combo.currentTextChanged.connect(self.change_font_size)
+        self.size_combo.currentTextChanged.connect(self.change_font_size)  # Keep using the more comprehensive version
         self.formatting_toolbar.addWidget(self.size_combo)
         
         # Add separator

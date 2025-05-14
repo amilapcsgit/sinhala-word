@@ -17,18 +17,18 @@ LEXICON_DIR = os.path.join(APP_DIR, "resources", "dictionary", "chunks")
 
 # Default font settings
 DEFAULT_FONT = "UN-Ganganee"  # Use a Sinhala font that's included in our fonts directory
-DEFAULT_FONT_SIZE = 14
-DEFAULT_WINDOW_SIZE = (1100, 780)
+DEFAULT_FONT_SIZE = 20
+DEFAULT_WINDOW_SIZE = (1280, 720)
 
 # Available font sizes
-FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
+FONT_SIZES = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 44, 48, 54, 60, 66, 72, 80, 88, 96]
 
 # Default user preferences
 DEFAULT_PREFERENCES = {
-    "theme": "light",
+    "theme": "dark",
     "font": DEFAULT_FONT,
     "font_size": DEFAULT_FONT_SIZE,
-    "keyboard_font_size": 26,  # Default keyboard font size
+    "keyboard_font_size": 20,  # Default keyboard font size
     "window_size": DEFAULT_WINDOW_SIZE,
     "show_keyboard": True,
     "show_suggestions": True,

@@ -1,16 +1,16 @@
 {
     "theme": "dark",
-    "font": "Noto Sans Sinhala",
+    "font": "Malithi Web",
     "font_size": 26,
     "window_size": [
-        1920,
-        1137
+        1728,
+        945
     ],
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [],
-    "keyboard_font_size": 25,
+    "keyboard_font_size": 20,
     "keyboard_height": 400,
     "keyboard_detached": false
 }

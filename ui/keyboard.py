@@ -36,6 +36,17 @@ class SinhalaKeyboard(QFrame):
     
     # Signal emitted when keyboard is resized
     keyboardResized = Signal(int)
+    
+    def height_for_font(self, font_size: int) -> int:
+        """Calculate the appropriate keyboard height based on font size.
+        
+        Args:
+            font_size: The font size to calculate height for
+            
+        Returns:
+            The calculated height in pixels
+        """
+        return int((font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
 
     def __init__(self, parent=None, dark_mode=False, font_size=None):
         super().__init__(parent)
@@ -485,8 +496,8 @@ class SinhalaKeyboard(QFrame):
             # Use the smaller dimension for square buttons
             button_size = min(button_height, button_width)
             
-            # Ensure minimum button size
-            min_button_size = max(MIN_KB_FONT, int(self.font_size * 0.8))
+            # Allow smaller button sizes for better responsiveness
+            min_button_size = max(5, int(self.font_size * 0.5))
             button_size = max(min_button_size, button_size)
             
             # Calculate font size for buttons - make the buttons as large as the current keyboard font allows,
@@ -772,16 +783,16 @@ class SinhalaKeyboard(QFrame):
             try:
                 btn.setStyleSheet(self.get_button_style(button_size))
                 
-                # Set minimum size but don't fix the size
-                min_button_size = max(20, int(self.font_size * 0.8))
+                # Set minimal size for better responsiveness
+                min_button_size = max(5, int(self.font_size * 0.5))
                 btn.setMinimumSize(min_button_size, min_button_size)
                 
                 # Set size policy to allow the button to grow and shrink with the layout
                 btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             except Exception as style_error:
                 print(f"Error applying style to button: {style_error}")
-                # Apply minimal styling
-                min_button_size = max(20, int(self.font_size * 0.8))
+                # Apply minimal styling with smaller size for responsiveness
+                min_button_size = max(5, int(self.font_size * 0.5))
                 btn.setMinimumSize(min_button_size, min_button_size)
                 btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             
@@ -797,7 +808,7 @@ class SinhalaKeyboard(QFrame):
                 fallback_btn = QPushButton("?")  # Use ? as fallback text
                 fallback_font = QFont("Arial", 12)
                 fallback_btn.setFont(fallback_font)
-                min_button_size = max(20, int(self.font_size * 0.8))
+                min_button_size = max(5, int(self.font_size * 0.5))
                 fallback_btn.setMinimumSize(min_button_size, min_button_size)
                 fallback_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
                 return fallback_btn
@@ -805,7 +816,7 @@ class SinhalaKeyboard(QFrame):
                 print(f"Error creating fallback button: {fallback_error}")
                 # Last resort - create an empty button
                 empty_btn = QPushButton()
-                min_button_size = max(20, int(self.font_size * 0.8))
+                min_button_size = max(5, int(self.font_size * 0.5))
                 empty_btn.setMinimumSize(min_button_size, min_button_size)
                 empty_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
                 return empty_btn
@@ -903,8 +914,8 @@ class SinhalaKeyboard(QFrame):
             space_btn.setFont(font)
             space_btn.setStyleSheet(self.get_space_button_style())
             
-            # Set minimum height but don't fix the height
-            min_button_size = max(20, int(self.font_size * 0.8))
+            # Set minimal button size for better responsiveness
+            min_button_size = max(5, int(self.font_size * 0.5))
             space_btn.setMinimumHeight(min_button_size)
             space_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))
@@ -928,7 +939,7 @@ class SinhalaKeyboard(QFrame):
             space_btn = QPushButton("Space")
             fallback_font = QFont("Arial", 12)
             space_btn.setFont(fallback_font)
-            min_button_size = max(20, int(self.font_size * 0.8))
+            min_button_size = max(5, int(self.font_size * 0.5))
             space_btn.setMinimumHeight(min_button_size)
             space_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             space_btn.clicked.connect(lambda checked=False, b=space_btn: self.on_key_clicked("Space", b))

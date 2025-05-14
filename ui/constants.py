@@ -4,9 +4,9 @@ Constants module for the Sinhala Word Processor.
 This module defines constants used throughout the application to ensure consistency.
 """
 
-# Keyboard font size constants
-MIN_KB_FONT = 26  # Minimum keyboard font size
-MAX_KB_FONT = 200  # Maximum keyboard font size
+# Keyboard font size constants - no restrictions for full responsiveness
+MIN_KB_FONT = 1  # Minimum keyboard font size (effectively no minimum)
+MAX_KB_FONT = 1000  # Maximum keyboard font size (effectively no maximum)
 
 # Standard base values for height/font calculations
 BASE_KB_HEIGHT = 264  # Base keyboard height

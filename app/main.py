@@ -269,6 +269,9 @@ class SinhalaWordApp(QMainWindow):
             keyboard_font_size = DEFAULT_KB_FONT_SIZE
             self.preferences["keyboard_font_size"] = keyboard_font_size  # Update preferences
             logging.warning(f"Invalid keyboard font size detected, reset to {keyboard_font_size}")
+        
+        # Log the keyboard font size being used
+        logging.info(f"Using keyboard font size: {keyboard_font_size}")
 
         # Create the Sinhala keyboard instance
         try:
@@ -278,16 +281,12 @@ class SinhalaWordApp(QMainWindow):
             # Connect the key press signal
             self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
 
-            # Calculate appropriate height based on font size using the standard base values
-            # Use a minimum height of 400px for better visibility
-            calculated_height = max(400, int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT))
+            # Calculate appropriate height based on font size using the keyboard's helper method
+            keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+            logging.info(f"Calculated keyboard height: {keyboard_height} based on font size: {keyboard_font_size}")
             
             # Ensure the keyboard has a reasonable size before we start
-            # Use the calculated height based on font size, with a minimum of 400px
-            self.keyboard_area.resize(self.width(), calculated_height)
-            
-            # Store the calculated height in preferences
-            self.preferences["keyboard_height"] = calculated_height
+            self.keyboard_area.resize(self.width(), keyboard_height)
             
             # Force an update of the buttons after initialization
             if hasattr(self.keyboard_area, 'update_buttons'):
@@ -359,8 +358,8 @@ class SinhalaWordApp(QMainWindow):
             keyboard_height = self.preferences.get("keyboard_height", default_keyboard_height)
             logging.info(f"No screen info available, using keyboard height: {keyboard_height}")
         
-        # Set a smaller minimum height to allow more flexibility
-        self.keyboard_container.setMinimumHeight(80)
+        # No minimum height constraint for full responsiveness
+        self.keyboard_container.setMinimumHeight(10)
         
         # Create a splitter handle effect by adding a frame at the top of the keyboard container
         splitter_handle = QFrame(self.keyboard_container)
@@ -442,11 +441,8 @@ class SinhalaWordApp(QMainWindow):
                         if hasattr(keyboard_area, 'update_buttons'):
                             keyboard_area.update_buttons()
                     
-                    # Update the main window's preferences directly
+                    # Update the main window layout
                     if main_window:
-                        # Save the current height in preferences
-                        main_window.preferences["keyboard_height"] = keyboard_height
-                        
                         # Force layout update to apply changes
                         main_window.updateGeometry()
                         
@@ -484,8 +480,7 @@ class SinhalaWordApp(QMainWindow):
                             # Calculate keyboard height (container height minus margins and handle)
                             keyboard_height = container_height - 10
                             
-                            # Save the final height in preferences
-                            main_window.preferences["keyboard_height"] = keyboard_height
+                            # No need to save keyboard height in preferences anymore
                             
                             # Set a permanent flag to prevent automatic resizing
                             main_window._manual_resize = True
@@ -822,8 +817,7 @@ class SinhalaWordApp(QMainWindow):
             # Calculate container height
             container_height = new_height + 10
             
-            # Save the keyboard height in preferences
-            self.preferences["keyboard_height"] = new_height
+            # No need to save keyboard height in preferences anymore
             logger.info(f"Manually applying keyboard height: {new_height}, container: {container_height}")
             
             # Resize the keyboard container directly
@@ -1017,13 +1011,15 @@ class SinhalaWordApp(QMainWindow):
                 # Get the current keyboard height
                 keyboard_height = self.keyboard_area.height()
                 
-                # If the keyboard height is valid, use it
+                # If the keyboard height is invalid, calculate based on font size
                 if keyboard_height <= 0:
-                    logger.debug(f"Invalid keyboard height: {keyboard_height}, using saved preference")
-                    keyboard_height = self.preferences.get("keyboard_height", 264)
+                    logger.debug(f"Invalid keyboard height: {keyboard_height}, calculating from font size")
+                    keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
+                    keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
             except Exception as e:
                 logger.error(f"Error getting keyboard height: {e}")
-                keyboard_height = self.preferences.get("keyboard_height", 264)
+                keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
+                keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
 
             # Calculate maximum allowed keyboard height (e.g., 50% of screen height)
             max_keyboard_height = int(screen_height * 0.50)
@@ -1044,8 +1040,7 @@ class SinhalaWordApp(QMainWindow):
                         self.keyboard_area.resize(self.keyboard_area.width(), max_keyboard_height)
                         self.keyboard_container.resize(self.keyboard_container.width(), max_keyboard_height + 10)
                         
-                        # Update preferences
-                        self.preferences["keyboard_height"] = max_keyboard_height
+                        # No need to store keyboard height in preferences anymore
 
                         # Update buttons to match new size
                         if hasattr(self.keyboard_area, 'update_buttons'):

@@ -7,6 +7,7 @@ handling font loading, discovery, and providing access to available fonts.
 import os
 import logging
 from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtCore import QObject, Signal
 
 # Import constants
 from ui.constants import (
@@ -17,7 +18,7 @@ from ui.constants import (
 # Set up logging
 logger = logging.getLogger("FontManager")
 
-class FontManager:
+class FontManager(QObject):
     """
     Centralized font management for the Sinhala Word Processor.
     
@@ -26,7 +27,11 @@ class FontManager:
     - Discovering system Sinhala fonts
     - Providing access to available fonts
     - Managing font preferences
+    - Emitting signals when font settings change
     """
+    
+    # Signal emitted when keyboard font size changes
+    fontSizeChanged = Signal(int)
     
     # Singleton instance
     _instance = None
@@ -44,6 +49,9 @@ class FontManager:
         if self._initialized:
             return
             
+        # Initialize QObject
+        super().__init__()
+        
         self._initialized = True
         
         # Font directories
@@ -244,8 +252,14 @@ class FontManager:
         """
         # Ensure size is within valid range for keyboard
         size = max(MIN_KB_FONT, min(MAX_KB_FONT, size))
-        self.current_keyboard_font_size = size
-        logger.info(f"Keyboard font size set to: {size}")
+        
+        # Only update and emit signal if the size actually changed
+        if self.current_keyboard_font_size != size:
+            self.current_keyboard_font_size = size
+            logger.info(f"Keyboard font size set to: {size}")
+            # Emit signal to notify subscribers
+            self.fontSizeChanged.emit(size)
+            
         return size
     
     def calculate_keyboard_font_size(self, height):

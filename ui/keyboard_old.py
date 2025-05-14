@@ -413,32 +413,6 @@ class SinhalaKeyboard(QFrame):
         except Exception as e:
             logger.error(f"Error resetting manual font size flag: {e}")
     
-    def height_for_font(self, font_size):
-        """
-        Calculate the appropriate keyboard height for a given font size.
-        This is the inverse of the font_manager.calculate_keyboard_font_size method.
-        
-        Args:
-            font_size (int): The font size to calculate height for.
-            
-        Returns:
-            int: The calculated keyboard height in pixels.
-        """
-        # Ensure font size is within valid range
-        from ui.constants import MIN_KB_FONT, MAX_KB_FONT, BASE_KB_HEIGHT, BASE_KB_FONT
-        font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, font_size))
-        
-        # Calculate height proportional to font size
-        # Use a more generous multiplier to ensure buttons have enough space
-        height = int(BASE_KB_HEIGHT * (font_size / BASE_KB_FONT) * 1.2)
-        
-        # Ensure minimum height for usability
-        min_height = 200
-        height = max(min_height, height)
-        
-        logger.info(f"Calculated keyboard height: {height} for font size: {font_size}")
-        return height
-        
     def set_font_size(self, size):
         """
         Update the font size by updating the FontManager.
@@ -447,11 +421,14 @@ class SinhalaKeyboard(QFrame):
         # Let the FontManager handle the size validation and update
         # This will trigger the fontSizeChanged signal which this widget listens to
         self.font_manager.set_keyboard_font_size(size)
-        
-        # Update the buttons to reflect the new font size
-        self.update_buttons()
-        # The flag will be reset by a timer after a delay
-        # This prevents resize loops when the keyboard is resized
+            
+            # Sync with font manager
+            self.font_manager.set_keyboard_font_size(size)
+            
+            # Update the buttons to reflect the new font size
+            self.update_buttons()
+            # The flag will be reset by a timer after a delay
+            # This prevents resize loops when the keyboard is resized
         
     def update_buttons(self):
         """Update all existing buttons with the current style and size"""
@@ -511,9 +488,11 @@ class SinhalaKeyboard(QFrame):
             min_button_size = max(5, int(self.font_size * 0.5))
             button_size = max(min_button_size, button_size)
             
-            # Calculate font size for buttons - use the actual font size from the font manager
-            # This ensures consistency with the user's selected font size
-            adjusted_font_size = self.font_size
+            # Calculate font size for buttons - make the buttons as large as the current keyboard font allows,
+            # but never let them overflow their cell
+            target_font_size = min(self.font_size, int(button_size * 0.9))
+            target_font_size = max(MIN_KB_FONT, target_font_size)
+            adjusted_font_size = target_font_size
             
             # Font size management during resize operations
             has_pre_resize_font = hasattr(self, '_pre_resize_font_size') and self._pre_resize_font_size is not None
@@ -528,9 +507,33 @@ class SinhalaKeyboard(QFrame):
                 in_resize_operation,
                 in_programmatic_resize
             ]):
-                # We'll skip automatic font size adjustment to respect user preferences
-                # This ensures the font size remains consistent with what the user has selected
-                logger.debug(f"Maintaining current font size: {self.font_size} (button size: {button_size})")
+                # Calculate new font size with a more stable formula
+                # This reduces the likelihood of resize loops
+                new_font_size = max(MIN_KB_FONT, round(button_size * 0.85))
+                
+                # Only enlarge the font automatically – never shrink it
+                if new_font_size > self.font_size:
+                    logger.info(f"Updating font size: {self.font_size} → {new_font_size} (button size: {button_size})")
+                    
+                    # Update font size in keyboard
+                    self.font_size = new_font_size
+                    
+                    # Update font manager without triggering signals
+                    try:
+                        # Update the font manager directly
+                        self.font_manager.current_keyboard_font_size = new_font_size
+                        
+                        # Update preferences without triggering another resize
+                        from PySide6.QtWidgets import QApplication
+                        app = QApplication.instance()
+                        if app:
+                            for widget in app.topLevelWidgets():
+                                if hasattr(widget, 'preferences'):
+                                    widget.preferences["keyboard_font_size"] = new_font_size
+                                    logger.info(f"Updated keyboard font size in preferences to {new_font_size}")
+                                    break
+                    except Exception as e:
+                        logger.error(f"Error updating font size in preferences: {e}")
             else:
                 # Log why we're skipping automatic adjustment
                 if in_resize_operation:

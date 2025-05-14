@@ -173,6 +173,13 @@ class SettingsDialog(QDialog):
     def apply_settings(self):
         """Apply the current settings."""
         settings = self.get_settings()
+        
+        # Update the FontManager directly for keyboard font size
+        from ui.font_manager import FontManager
+        font_manager = FontManager()
+        font_manager.set_keyboard_font_size(settings["keyboard_font_size"])
+        
+        # Emit signal with all settings
         self.settingsApplied.emit(settings)
     
     def get_loaded_sinhala_fonts(self):

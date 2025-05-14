@@ -275,7 +275,8 @@ class SinhalaWordApp(QMainWindow):
         # Create the Sinhala keyboard instance
         try:
             # Create the keyboard directly with the parent
-            self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode, font_size=keyboard_font_size)
+            # No need to pass font_size - it will get it from the FontManager
+            self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode)
 
             # Connect the key press signal if available
             if hasattr(self.keyboard_area, 'keyPressed'):
@@ -634,7 +635,7 @@ class SinhalaWordApp(QMainWindow):
                 return
             
             # Check if this is a duplicate resize (same height as before)
-            if hasattr(self, '_last_keyboard_height') and abs(self._last_keyboard_height - new_height) < 5:
+            if hasattr(self, '_last_keyboard_height') and self._last_keyboard_height is not None and abs(self._last_keyboard_height - new_height) < 5:
                 logger.debug(f"Ignoring small height change: {self._last_keyboard_height} -> {new_height}")
                 return
                 
@@ -1235,35 +1236,14 @@ class SinhalaWordApp(QMainWindow):
                 return
                 
             # Update font manager - this is the single source of truth
+            # The FontManager will emit a signal that the keyboard will listen to
             self.font_manager.set_keyboard_font_size(size)
             
             # Update preferences
             self.preferences["keyboard_font_size"] = size
             
-            # Update keyboard if it exists
-            if hasattr(self.keyboard_area, 'set_font_size'):
-                # Now set the font size - this will trigger update_buttons
-                self.keyboard_area.set_font_size(size)
-                logger.info(f"Keyboard font size updated to: {size}")
-                
-                # Force an update of the buttons after setting the font size
-                if hasattr(self.keyboard_area, 'update_buttons'):
-                    self.keyboard_area.update_buttons()
-                    logger.info("Forced update of keyboard buttons after font size change")
-                
-                # Keep the manual font size flag set for a short time to prevent resize loops
-                # We'll use a timer to reset it after a delay
-                if hasattr(self, '_keyboard_font_timer'):
-                    try:
-                        self._keyboard_font_timer.stop()
-                    except:
-                        pass
-                
-                from PySide6.QtCore import QTimer
-                self._keyboard_font_timer = QTimer()
-                self._keyboard_font_timer.setSingleShot(True)
-                self._keyboard_font_timer.timeout.connect(self._reset_keyboard_font_flag)
-                self._keyboard_font_timer.start(2000)  # Increased to 2000ms (2 seconds) to prevent resize conflicts
+            # No need to update keyboard directly - it will respond to the signal
+            logger.info(f"Keyboard font size updated to: {size} via FontManager")
             
             # Save preferences
             config.save_user_preferences(self.preferences)

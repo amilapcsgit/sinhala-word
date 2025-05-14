@@ -1,7 +1,7 @@
 {
     "theme": "dark",
-    "font": "Abhaya Libre",
-    "font_size": 25,
+    "font": "Nirmala UI",
+    "font_size": 31,
     "window_size": [
         1728,
         945
@@ -12,14 +12,14 @@
     "recent_files": [
         "C:/sinhalaword/test sinhala v6.txt"
     ],
-    "keyboard_font_size": 31,
+    "keyboard_font_size": 22,
     "keyboard_height": 400,
     "keyboard_detached": false,
     "splitter_state": [
-        723,
+        626,
         [
-            723,
-            210
+            626,
+            225
         ]
     ]
 }

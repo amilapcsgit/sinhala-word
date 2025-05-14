@@ -1,10 +1,10 @@
 {
     "theme": "dark",
-    "font": "AFSandarenu",
-    "font_size": 36,
+    "font": "Abhaya Libre",
+    "font_size": 25,
     "window_size": [
-        1920,
-        1027
+        1280,
+        768
     ],
     "show_keyboard": true,
     "show_suggestions": true,
@@ -12,14 +12,14 @@
     "recent_files": [
         "C:/sinhalaword/test sinhala v6.txt"
     ],
-    "keyboard_font_size": 72,
-    "keyboard_height": 328,
+    "keyboard_font_size": 25,
+    "keyboard_height": 400,
     "keyboard_detached": false,
     "splitter_state": [
-        663,
+        547,
         [
-            663,
-            188
+            547,
+            386
         ]
     ]
 }

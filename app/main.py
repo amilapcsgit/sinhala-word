@@ -277,12 +277,19 @@ class SinhalaWordApp(QMainWindow):
             # Create the keyboard directly with the parent
             self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode, font_size=keyboard_font_size)
 
-            # Connect the key press signal
-            self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
+            # Connect the key press signal if available
+            if hasattr(self.keyboard_area, 'keyPressed'):
+                self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
 
             # Calculate appropriate height based on font size using the keyboard's helper method
-            keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
-            logging.info(f"Calculated keyboard height: {keyboard_height} based on font size: {keyboard_font_size}")
+            if hasattr(self.keyboard_area, 'height_for_font'):
+                keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+                logging.info(f"Calculated keyboard height: {keyboard_height} based on font size: {keyboard_font_size}")
+            else:
+                # Fallback calculation if the method is not available
+                from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT
+                keyboard_height = int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
+                logging.info(f"Using fallback height calculation: {keyboard_height} for font size: {keyboard_font_size}")
             
             # Ensure the keyboard has a reasonable size before we start
             self.keyboard_area.resize(self.width(), keyboard_height)
@@ -443,6 +450,8 @@ class SinhalaWordApp(QMainWindow):
                 self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
             except Exception as e:
                 logger.error(f"Error connecting keyboard resize signal: {e}")
+        else:
+            logger.warning("Keyboard area doesn't have keyboardResized signal - skipping connection")
         
         # Show/hide keyboard container based on preferences
         if self.preferences["show_keyboard"]:
@@ -877,11 +886,21 @@ class SinhalaWordApp(QMainWindow):
                 if keyboard_height <= 0:
                     logger.debug(f"Invalid keyboard height: {keyboard_height}, calculating from font size")
                     keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
-                    keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+                    if hasattr(self.keyboard_area, 'height_for_font'):
+                        keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+                    else:
+                        # Fallback calculation if the method is not available
+                        from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT
+                        keyboard_height = int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
             except Exception as e:
                 logger.error(f"Error getting keyboard height: {e}")
                 keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
-                keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+                if hasattr(self.keyboard_area, 'height_for_font'):
+                    keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+                else:
+                    # Fallback calculation if the method is not available
+                    from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT
+                    keyboard_height = int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
 
             # Calculate maximum allowed keyboard height (e.g., 50% of screen height)
             max_keyboard_height = int(screen_height * 0.50)
@@ -1696,8 +1715,16 @@ class SinhalaWordApp(QMainWindow):
         # Update theme label
         self.themeLbl.setText("☀️ Light" if not is_dark else "🌙 Dark")
         
-        # Update keyboard theme
-        self.keyboard_area.set_dark_mode(is_dark)
+        # Update keyboard theme if it's a SinhalaKeyboard
+        if hasattr(self.keyboard_area, 'set_dark_mode'):
+            self.keyboard_area.set_dark_mode(is_dark)
+        else:
+            logging.warning("Keyboard area doesn't have set_dark_mode method - using fallback styling")
+            # Apply fallback styling for the basic QWidget
+            if is_dark:
+                self.keyboard_area.setStyleSheet("background-color: #2d2d2d; border: 1px solid #444444;")
+            else:
+                self.keyboard_area.setStyleSheet("background-color: #f0f0f0; border: 1px solid #cccccc;")
         
         # Update combo box styles
         self.update_combo_box_styles()
@@ -2848,28 +2875,25 @@ class SinhalaWordApp(QMainWindow):
     
     # --- Splitter Moved Event ---
     def on_splitter_moved(self, pos, index):
-        """Handle splitter movement to update keyboard."""
+        """Handle splitter movement to update keyboard font size based on height."""
         # Get the current keyboard container height
         keyboard_height = self.keyboard_container.height()
         
-        # Calculate a new font size based on the keyboard height
-        # This helps maintain proportional sizing
-        from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT, MIN_KB_FONT, MAX_KB_FONT
-        
-        # Calculate new font size proportional to height and round to nearest integer
-        new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(BASE_KB_FONT * keyboard_height / BASE_KB_HEIGHT)))
-        
-        # Only update if the integer value has changed
-        current_font_size = self.preferences.get("keyboard_font_size", BASE_KB_FONT)
-        if new_font_size != int(current_font_size):
-            # Use the existing method to update the keyboard font size
-            # This will handle all the necessary updates
-            self.set_keyboard_font_size(new_font_size)
-            logging.info(f"Updated keyboard font size to {new_font_size} based on height {keyboard_height}")
-        else:
-            # Even if the font size didn't change, update the buttons
-            if hasattr(self.keyboard_area, 'update_buttons'):
-                self.keyboard_area.update_buttons()
+        # Calculate a new font size based on the keyboard height using the helper method
+        if hasattr(self.keyboard_area, 'height_for_font'):
+            # Use the keyboard's helper method to calculate appropriate font size
+            from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT, MIN_KB_FONT, MAX_KB_FONT
+            
+            # Calculate new font size proportional to height and round to nearest integer
+            new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(BASE_KB_FONT * keyboard_height / BASE_KB_HEIGHT)))
+            
+            # Update the preferences directly
+            self.preferences["keyboard_font_size"] = new_font_size
+            
+            # Update the keyboard font size if needed
+            if hasattr(self.keyboard_area, 'set_font_size'):
+                self.keyboard_area.set_font_size(new_font_size)
+                logging.info(f"Updated keyboard font size to {new_font_size} based on height {keyboard_height}")
         
         # Save the splitter state in preferences
         self.preferences["splitter_state"] = [pos, self.main_splitter.sizes()]

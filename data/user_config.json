@@ -3,8 +3,8 @@
     "font": "Abhaya Libre",
     "font_size": 25,
     "window_size": [
-        1280,
-        768
+        1728,
+        945
     ],
     "show_keyboard": true,
     "show_suggestions": true,
@@ -12,14 +12,14 @@
     "recent_files": [
         "C:/sinhalaword/test sinhala v6.txt"
     ],
-    "keyboard_font_size": 25,
+    "keyboard_font_size": 31,
     "keyboard_height": 400,
     "keyboard_detached": false,
     "splitter_state": [
-        547,
+        723,
         [
-            547,
-            386
+            723,
+            210
         ]
     ]
 }

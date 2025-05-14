@@ -36,17 +36,6 @@ class SinhalaKeyboard(QFrame):
     
     # Signal emitted when keyboard is resized
     keyboardResized = Signal(int)
-    
-    def height_for_font(self, font_size: int) -> int:
-        """Calculate the appropriate keyboard height based on font size.
-        
-        Args:
-            font_size: The font size to calculate height for
-            
-        Returns:
-            The calculated height in pixels
-        """
-        return int((font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
 
     def __init__(self, parent=None, dark_mode=False, font_size=None):
         super().__init__(parent)
@@ -1474,117 +1463,14 @@ class SinhalaKeyboard(QFrame):
             if event.size() == event.oldSize():
                 return
                 
-            # Track resize frequency to detect and prevent loops
-            import time
-            current_time = time.time()
-            time_since_last = current_time - self._last_resize_time
-            self._last_resize_time = current_time
+            # Simply update the buttons to match the new size
+            # The QSplitter will handle the layout automatically
+            self.update_buttons()
             
-            # More efficient approach to detect and prevent resize loops
-            # Only increment counter for rapid resizes (less than 0.3 seconds apart)
-            if time_since_last < 0.3:
-                self._resize_count += 1
-            else:
-                # Reset counter if enough time has passed between resizes
-                self._resize_count = 0
-            
-            # Break resize loops with a higher threshold to reduce false positives
-            if self._resize_count > 12:  # Increased from 8 to 12
-                logger.warning(f"Detected resize loop! Count: {self._resize_count}, Time: {time_since_last:.3f}s")
-                # Skip this resize to break the loop
-                self._resize_count = 0
-                # Force a delay before allowing more resize events
-                import time
-                time.sleep(0.1)  # Small delay to break the loop
-                return
+            # Emit signal with new height for any components that need to know
+            current_height = self.height()
+            self.keyboardResized.emit(current_height)
                 
-            # Skip if we're in a manual resize operation
-            # This is critical to prevent resize loops during dragging
-            if self.resize_in_progress:
-                # During manual resize, we don't want to trigger any additional updates
-                # Just accept the event and return
-                event.accept()
-                return
-                
-            # Skip if we're in a programmatic resize from the main window
-            # Check if main window has the resize state set to PROGRAMMATIC
-            try:
-                from PySide6.QtWidgets import QApplication
-                app = QApplication.instance()
-                if app:
-                    for widget in app.topLevelWidgets():
-                        if (widget.__class__.__name__ == "SinhalaWordApp" and 
-                            hasattr(widget, '_kb_resize_state') and 
-                            widget._kb_resize_state == ResizeState.PROGRAMMATIC):
-                            # Skip updates during programmatic resize from main window
-                            event.accept()
-                            return
-            except Exception as e:
-                print(f"Error checking main window resize state: {e}")
-                
-            # Check if size has changed (either width or height)
-            size_changed = (event.size().height() != event.oldSize().height() or 
-                           event.size().width() != event.oldSize().width())
-                
-            # Check if manual font size adjustment is in progress
-            # If so, we should be more conservative about triggering updates
-            if hasattr(self, '_manual_font_size') and self._manual_font_size:
-                # During manual resize, only allow significant changes to trigger updates
-                # This prevents resize loops during manual resizing
-                if not size_changed or abs(event.size().height() - event.oldSize().height()) < 20:  # Increased threshold
-                    return
-            
-            # Only update if size has changed and not in manual resize
-            if size_changed:
-                # Get current dimensions with error handling
-                try:
-                    current_height = self.height()
-                    current_width = self.width()
-                    
-                    # Skip if dimensions are invalid
-                    if current_height <= 0 or current_width <= 0:
-                        return
-                        
-                    # Skip if this is the same height we just emitted (prevent loops)
-                    # Only check height since that's what we emit in the signal
-                    # Use a larger threshold to prevent loops
-                    threshold = 20  # Increased from 10 to reduce update frequency
-                    if hasattr(self, '_last_emitted_height') and abs(current_height - self._last_emitted_height) < threshold:
-                        return
-                    
-                    # Always update buttons when resizing
-                    # This ensures the keyboard layout adjusts properly
-                    try:
-                        # Temporarily block signals to prevent feedback loops
-                        old_block_state = self.blockSignals(True)
-                        
-                        # Force a complete update of all buttons
-                        self.update_buttons()
-                        
-                        # Restore signal blocking state
-                        self.blockSignals(old_block_state)
-                        
-                        # Store the current size for future reference
-                        # This helps with proportional calculations
-                        if not self.initial_size:
-                            self.initial_size = self.size()
-                    except Exception as update_error:
-                        print(f"Error updating buttons during resize: {update_error}")
-                    
-                    # Store the height we're about to emit
-                    self._last_emitted_height = current_height
-                    
-                    # Emit signal with new height - only log if significant change
-                    if abs(current_height - event.oldSize().height()) > 10:
-                        print(f"Keyboard resized to height: {current_height}, width: {current_width}")
-                    
-                    # Temporarily block signals to prevent feedback loops
-                    old_block_state = self.blockSignals(True)
-                    self.keyboardResized.emit(current_height)
-                    self.blockSignals(old_block_state)
-                    
-                except Exception as height_error:
-                    print(f"Error getting dimensions in resizeEvent: {height_error}")
         except Exception as e:
             print(f"Error in resizeEvent: {e}")
             

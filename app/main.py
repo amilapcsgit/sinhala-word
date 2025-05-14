@@ -1181,26 +1181,38 @@ class SinhalaWordApp(QMainWindow):
             logger.error(f"Error docking keyboard: {e}")
             
     def reset_keyboard_size(self):
-        """Reset the keyboard to its default size."""
+        """Reset the keyboard to a specific size (font size 20, height 225px)."""
         try:
-            # Use the default keyboard font size from constants
-            default_font_size = DEFAULT_KB_FONT_SIZE
+            # Set specific font size and height as requested
+            custom_font_size = 20
+            custom_height = 225
             
-            # Calculate default height based on the font size using standard base values
-            default_height = int((default_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
-            
-            # Ensure a minimum height for better visibility
-            default_height = max(400, default_height)
-            
-            # Use resize instead of setFixedHeight to allow future resizing
-            self.keyboard_area.resize(self.keyboard_area.width(), default_height)
-            logger.info(f"Reset keyboard height to: {default_height}")
-                
-            # Resize the container
-            self.keyboard_container.resize(self.keyboard_container.width(), default_height + 10)
+            # First set the font size
+            if hasattr(self.keyboard_area, 'set_font_size'):
+                self.keyboard_area.set_font_size(custom_font_size)
+                self.preferences["keyboard_font_size"] = custom_font_size
+                logger.info(f"Set keyboard font size to: {custom_font_size}")
             
             # Update preferences
-            self.preferences["keyboard_height"] = default_height
+            self.preferences["keyboard_height"] = custom_height
+            logger.info(f"Set keyboard height preference to: {custom_height}")
+            
+            # If we have a splitter, adjust the sizes
+            if hasattr(self, 'main_splitter') and self.main_splitter:
+                # Get current sizes
+                current_sizes = self.main_splitter.sizes()
+                if len(current_sizes) >= 2:
+                    # Calculate new sizes
+                    total_height = sum(current_sizes)
+                    editor_height = total_height - custom_height
+                    
+                    # Set new sizes
+                    self.main_splitter.setSizes([editor_height, custom_height])
+                    logger.info(f"Adjusted splitter sizes: editor={editor_height}, keyboard={custom_height}")
+            
+            # Also directly resize the keyboard and container for good measure
+            self.keyboard_area.resize(self.keyboard_area.width(), custom_height)
+            self.keyboard_container.resize(self.keyboard_container.width(), custom_height + 10)
             
             # Update buttons to match new size
             if hasattr(self.keyboard_area, 'update_buttons'):
@@ -1209,15 +1221,10 @@ class SinhalaWordApp(QMainWindow):
             
             # Force layout update
             self.keyboard_container.updateGeometry()
+            self.keyboard_area.updateGeometry()
             self.updateGeometry()
             
-            # Reset keyboard font size to default
-            if hasattr(self.keyboard_area, 'set_font_size'):
-                self.keyboard_area.set_font_size(default_font_size)
-                self.preferences["keyboard_font_size"] = default_font_size
-                logger.info(f"Reset keyboard font size to: {default_font_size}")
-            
-            logger.info(f"Keyboard reset to default height: {default_height}")
+            logger.info(f"Keyboard reset to height: {custom_height} with font size: {custom_font_size}")
         except Exception as e:
             logger.error(f"Error in reset_keyboard_size: {e}")
 
@@ -1955,7 +1962,7 @@ class SinhalaWordApp(QMainWindow):
         view_menu.addAction(self.dock_keyboard_action)
         
         # Add reset keyboard size action
-        self.reset_keyboard_action = QAction("Reset Keyboard Size", self)
+        self.reset_keyboard_action = QAction("Set Keyboard (Size 20, Height 225px)", self)
         self.reset_keyboard_action.setShortcut("Ctrl+Alt+K")
         self.reset_keyboard_action.triggered.connect(self.reset_keyboard_size)
         view_menu.addAction(self.reset_keyboard_action)

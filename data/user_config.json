@@ -1,10 +1,10 @@
 {
     "theme": "dark",
     "font": "Nirmala UI",
-    "font_size": 31,
+    "font_size": 30,
     "window_size": [
-        1728,
-        945
+        1920,
+        1027
     ],
     "show_keyboard": true,
     "show_suggestions": true,
@@ -12,14 +12,14 @@
     "recent_files": [
         "C:/sinhalaword/test sinhala v6.txt"
     ],
-    "keyboard_font_size": 22,
-    "keyboard_height": 400,
+    "keyboard_font_size": 20,
+    "keyboard_height": 225,
     "keyboard_detached": false,
     "splitter_state": [
-        626,
+        703,
         [
-            626,
-            225
+            703,
+            230
         ]
     ]
 }

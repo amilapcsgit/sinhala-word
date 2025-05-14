@@ -160,7 +160,8 @@ class SinhalaWordApp(QMainWindow):
     - Dark / Light theme toggle (View → Toggle Theme) - Enhanced implementation
     - Plain‑text load/save functionality.
     """
-    # We don't need the resize state anymore with QSplitter
+    # Centralized resize state
+    _kb_resize_state = ResizeState.IDLE
     def __init__(self):
         # --- Load User Preferences ---
         self.preferences = config.load_user_preferences()
@@ -315,126 +316,103 @@ class SinhalaWordApp(QMainWindow):
         # Create a central widget and layout to hold the editor and suggestion area
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for better space usage
-        main_layout.setSpacing(0)  # Remove spacing
         
         # Note: The suggestion popup is not added to the layout as it's a popup widget
         logger.info("Created suggestion popup widget")
         
-        # Create a splitter to hold the editor and keyboard
+        # Create a vertical splitter to hold the editor and keyboard
         self.main_splitter = QSplitter(Qt.Vertical)
         
         # Add editor to the splitter
         self.main_splitter.addWidget(self.editor)
         
-        # Create keyboard container
-        self.keyboard_container = QWidget()
+        # Add keyboard area to the splitter
+        self.main_splitter.addWidget(self.keyboard_area)
         
-        # Get saved keyboard height from preferences or use default
-        default_keyboard_height = 264
+        # Set initial sizes based on preferences
+        keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
+        keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
+        editor_height = 780 - keyboard_height  # Assuming default window height is 780
+        self.main_splitter.setSizes([editor_height, keyboard_height])
+        
+        # Connect the splitter's moved signal to update preferences
+        self.main_splitter.splitterMoved.connect(self.on_splitter_moved)
+        
+        # Add the splitter to the main layout
+        main_layout.addWidget(self.main_splitter)
         
         # Log the current preferences
-        logging.info(f"Keyboard preferences: height={self.preferences.get('keyboard_height', 'not set')}, "
-                    f"font_size={self.preferences.get('keyboard_font_size', 'not set')}")
+        logging.info(f"Keyboard preferences: font_size={self.preferences.get('keyboard_font_size', 'not set')}")
         
-        # Get saved height but limit it to a reasonable value (25% of screen height - reduced from 30%)
+        # Log screen dimensions for reference
         screen = self.screen()
         if screen:
             screen_height = screen.availableGeometry().height()
             screen_width = screen.availableGeometry().width()
             logging.info(f"Screen dimensions: {screen_width}x{screen_height}")
             
-            # More conservative height limit (25% of screen)
-            max_keyboard_height = int(screen_height * 0.25)
-            
-            # Get saved height with validation
-            saved_height = self.preferences.get("keyboard_height", default_keyboard_height)
-            
-            # Validate saved height (must be positive and reasonable)
-            if saved_height <= 0 or saved_height > screen_height:
-                logging.warning(f"Invalid saved keyboard height: {saved_height}, using default")
-                saved_height = default_keyboard_height
-                
-            # Apply the limit
-            keyboard_height = min(saved_height, max_keyboard_height)
-            logging.info(f"Using keyboard height: {keyboard_height} (saved: {saved_height}, max: {max_keyboard_height})")
-        else:
-            keyboard_height = self.preferences.get("keyboard_height", default_keyboard_height)
-            logging.info(f"No screen info available, using keyboard height: {keyboard_height}")
-        
-        # No minimum height constraint for full responsiveness
-        self.keyboard_container.setMinimumHeight(10)
-        
-        # Create a splitter handle effect by adding a frame at the top of the keyboard container
-        splitter_handle = QFrame(self.keyboard_container)
-        splitter_handle.setFrameShape(QFrame.HLine)
-        splitter_handle.setFrameShadow(QFrame.Sunken)
-        splitter_handle.setFixedHeight(8)  # Make it a bit taller for easier grabbing
-        splitter_handle.setStyleSheet("""
-            QFrame {
+        # Set the main splitter's handle style
+        self.main_splitter.setHandleWidth(8)
+        self.main_splitter.setStyleSheet("""
+            QSplitter::handle {
                 background-color: #cccccc;
                 border: 1px solid #aaaaaa;
                 border-radius: 2px;
             }
-            QFrame:hover {
+            QSplitter::handle:hover {
                 background-color: #bbbbbb;
                 border: 1px solid #999999;
             }
         """)
-        # Set up the keyboard container with a simple layout
+        # Set the central widget
+        self.setCentralWidget(central_widget)
+
+        
+        # Set size policy to allow the container to grow and shrink
+        # Use Preferred for vertical to allow manual resizing
         self.keyboard_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.keyboard_container.setMinimumHeight(80)  # Minimum height for visibility
-        self.keyboard_container.setObjectName("keyboard_container")
+        
+        # Make sure the container can be resized
+        self.keyboard_container.setMinimumHeight(80)  # Smaller minimum height for flexibility
+        self.keyboard_container.setMaximumHeight(16777215)  # Maximum possible height (QWIDGETSIZE_MAX)
         
         # Create layout for keyboard container with minimal margins
         keyboard_layout = QVBoxLayout(self.keyboard_container)
         keyboard_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         keyboard_layout.setSpacing(0)  # Remove spacing
         
-        # Add the keyboard to the container
+        # Add the splitter handle to the layout
+        keyboard_layout.addWidget(splitter_handle)
+        
+        # Set an object name for the keyboard container to make it easier to find
+        self.keyboard_container.setObjectName("keyboard_container")
+        
+        # Add the keyboard to the container with stretch factor
         try:
-            keyboard_layout.addWidget(self.keyboard_area)
+            keyboard_layout.addWidget(self.keyboard_area, 1)  # Add with stretch factor of 1
         except Exception as e:
             logging.error(f"Error adding keyboard to layout: {e}")
             # Try to recover by recreating the keyboard area
             try:
                 self.keyboard_area = QWidget(self)
-                keyboard_layout.addWidget(self.keyboard_area)
-            except Exception as fallback_error:
-                logging.error(f"Failed to create fallback keyboard: {fallback_error}")
+                keyboard_layout.addWidget(self.keyboard_area, 1)  # Add with stretch factor of 1
+            except:
+                pass
         
-        # Add the keyboard container to the splitter
-        self.main_splitter.addWidget(self.keyboard_container)
+        # Add the container to the main layout with stretch factor of 0
+        # This prevents automatic stretching and allows manual resizing
+        main_layout.addWidget(self.keyboard_container, 0)
         
-        # Set initial sizes for the splitter (editor gets more space than keyboard)
-        # Check if we have saved splitter state
-        if "splitter_state" in self.preferences:
-            try:
-                # Restore saved splitter state
-                saved_sizes = self.preferences["splitter_state"][1]
-                self.main_splitter.setSizes(saved_sizes)
-                logging.info(f"Restored splitter sizes: {saved_sizes}")
-            except Exception as e:
-                # Fall back to default sizes
-                self.main_splitter.setSizes([700, default_keyboard_height])
-                logging.error(f"Error restoring splitter state: {e}")
-        else:
-            # Use default sizes
-            self.main_splitter.setSizes([700, default_keyboard_height])
-        
-        # Add the splitter to the main layout
-        main_layout.addWidget(self.main_splitter)
-        
-        # Configure the splitter to look nice
-        self.main_splitter.setHandleWidth(8)  # Make the handle easier to grab
-        self.main_splitter.setChildrenCollapsible(False)  # Prevent widgets from being collapsed to zero size
-        
-        # Connect splitter moved signal to update keyboard
-        self.main_splitter.splitterMoved.connect(self.on_splitter_moved)
-        
-        # Ensure the keyboard area has the right size policy
-        if hasattr(self.keyboard_area, 'setSizePolicy'):
-            self.keyboard_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Set initial size without restricting future resizing
+        try:
+            self.keyboard_container.resize(self.width(), keyboard_height + 10)
+            self.keyboard_area.resize(self.width(), keyboard_height)
+            
+            # Ensure the keyboard area has the right size policy
+            if hasattr(self.keyboard_area, 'setSizePolicy'):
+                self.keyboard_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        except Exception as resize_error:
+            logging.error(f"Error setting initial keyboard size: {resize_error}")
         
         # Connect keyboard resize signal if it's a SinhalaKeyboard
         if hasattr(self.keyboard_area, 'keyboardResized'):
@@ -607,7 +585,7 @@ class SinhalaWordApp(QMainWindow):
     # Timer for debouncing keyboard resize events
     _keyboard_resize_timer = None
     _pending_keyboard_height = None
-    # We don't need the manual resize flag anymore with QSplitter
+    _manual_resize = False  # Flag to indicate manual resizing
     _in_resize = False  # Flag to prevent resize loops
     _last_keyboard_height = None  # Store last height for comparison
 
@@ -1204,6 +1182,34 @@ class SinhalaWordApp(QMainWindow):
         # Save preferences
         config.save_user_preferences(self.preferences)
         
+    def on_splitter_moved(self, pos, index):
+        """Handle splitter movement to update keyboard font size."""
+        if index != 0:  # We only care about the first splitter position (between editor and keyboard)
+            return
+            
+        # Get the current keyboard height
+        keyboard_height = self.keyboard_area.height()
+        
+        # Calculate new font size based on the keyboard height
+        # Use the same formula as in the original code
+        base_height = BASE_KB_HEIGHT
+        base_font_size = BASE_KB_FONT
+        
+        # Calculate new font size proportional to height and round to nearest integer
+        new_font_size = max(MIN_KB_FONT, min(MAX_KB_FONT, round(base_font_size * keyboard_height / base_height)))
+        
+        # Update preferences
+        self.preferences["keyboard_font_size"] = new_font_size
+        
+        # Update the keyboard font size
+        if hasattr(self.keyboard_area, 'set_font_size'):
+            self.keyboard_area.set_font_size(new_font_size)
+            
+        # Save preferences
+        config.save_user_preferences(self.preferences)
+        
+        logger.info(f"Updated keyboard font size to {new_font_size} based on height {keyboard_height}")
+    
     def set_keyboard_font_size(self, size):
         """Update the keyboard font size."""
         try:
@@ -1214,13 +1220,7 @@ class SinhalaWordApp(QMainWindow):
             if size < MIN_KB_FONT or size > MAX_KB_FONT:
                 logger.warning(f"Invalid keyboard font size: {size}")
                 return
-                
-            # Guard against race conditions before we overwrite a user-set font
-            if self._kb_resize_state == ResizeState.USER or \
-               getattr(self.keyboard_area, '_manual_font_size', False):
-                logger.debug("Skipping automatic font-calc during a user-initiated resize.")
-                return
-                
+            
             # Update font manager - this is the single source of truth
             self.font_manager.set_keyboard_font_size(size)
             
@@ -1229,37 +1229,21 @@ class SinhalaWordApp(QMainWindow):
             
             # Update keyboard if it exists
             if hasattr(self.keyboard_area, 'set_font_size'):
-                # Get the current keyboard height
-                current_height = self.keyboard_area.height()
+                # Calculate appropriate height based on font size
+                calculated_height = self.keyboard_area.height_for_font(size)
                 
-                # Check if we're in a manual resize operation
-                keyboard_in_manual_resize = (hasattr(self.keyboard_area, 'resize_in_progress') and 
-                                           self.keyboard_area.resize_in_progress)
+                # Update splitter sizes if it exists
+                if hasattr(self, 'main_splitter'):
+                    current_sizes = self.main_splitter.sizes()
+                    editor_height = current_sizes[0]
+                    self.main_splitter.setSizes([editor_height, calculated_height])
                 
-                # Only adjust height if we're not in a manual resize operation
-                if not keyboard_in_manual_resize:
-                    # Calculate appropriate height based on font size using constants from FontManager
-                    calculated_height = int((size / BASE_KB_FONT) * BASE_KB_HEIGHT)
-                    
-                    # Set a flag to prevent automatic font size adjustment during resize
-                    if hasattr(self.keyboard_area, '_manual_font_size'):
-                        self.keyboard_area._manual_font_size = True
-                    
-                    # Only resize if the height difference is significant
-                    if abs(calculated_height - current_height) > 10:
-                        # Resize the keyboard to match the font size
-                        self.keyboard_area.resize(self.keyboard_area.width(), calculated_height)
-                        logger.info(f"Adjusted keyboard height to {calculated_height} based on font size {size}")
-                else:
-                    # We're in a manual resize operation, so respect the current height
-                    logger.info(f"Keeping current keyboard height {current_height} during manual resize")
-                
-                # Now set the font size - this will trigger update_buttons
-                # Pass a flag to indicate this is a manual font size change
+                # Set the font size - this will trigger update_buttons
                 self.keyboard_area.set_font_size(size)
                 logger.info(f"Keyboard font size updated to: {size}")
                 
-                # Force an update of the buttons after setting the font size
+                # Save preferences
+                config.save_user_preferences(self.preferences)
                 if hasattr(self.keyboard_area, 'update_buttons'):
                     self.keyboard_area.update_buttons()
                     logger.info("Forced update of keyboard buttons after font size change")
@@ -2878,42 +2862,12 @@ class SinhalaWordApp(QMainWindow):
             # Clear the manual resize flag after a delay
             QTimer.singleShot(1000, lambda: setattr(self, '_manual_resize', False))
     
-    # --- Splitter Moved Event ---
-    def on_splitter_moved(self, pos, index):
-        """Handle splitter movement to update keyboard."""
-        # Get the current keyboard container height
-        keyboard_height = self.keyboard_container.height()
-        
-        # Update the keyboard area if needed
-        if hasattr(self.keyboard_area, 'update_buttons'):
-            self.keyboard_area.update_buttons()
-            
-        # Calculate a new font size based on the keyboard height
-        # This helps maintain proportional sizing
-        base_height = 264
-        base_font_size = 26
-        
-        # Calculate new font size proportional to height and round to nearest integer
-        new_font_size = max(20, min(200, round(base_font_size * keyboard_height / base_height)))
-        
-        # Only update if the integer value has changed
-        current_font_size = self.preferences.get("keyboard_font_size", 26)
-        if new_font_size != int(current_font_size):
-            # Update the font size
-            if hasattr(self, 'set_keyboard_font_size'):
-                self.set_keyboard_font_size(new_font_size)
-                logging.info(f"Updated keyboard font size to {new_font_size} based on height {keyboard_height}")
-        
-        # Save the splitter state in preferences
-        self.preferences["splitter_state"] = [pos, self.main_splitter.sizes()]
-        
-        # Save preferences to disk
-        from app import config
-        config.save_user_preferences(self.preferences)
-    
     # --- Resize Event ---
     def resizeEvent(self, event):
         """Handle window resize events."""
+        # Store the old size before calling the parent's resizeEvent
+        old_size = event.oldSize()
+        
         # Call the parent's resizeEvent
         super().resizeEvent(event)
         
@@ -2921,14 +2875,23 @@ class SinhalaWordApp(QMainWindow):
         if hasattr(self, 'suggestion_popup') and self.suggestion_popup.isVisible():
             self.update_suggestion_popup_position()
         
-        # Update keyboard buttons to match the new window size
-        if hasattr(self, 'keyboard_area'):
+        # Only update keyboard if the width changed, not the height
+        # This prevents resize loops when the keyboard itself is being resized
+        if hasattr(self, 'keyboard_area') and old_size.width() != self.width():
             try:
-                # Update the keyboard buttons to match the new window size
-                if hasattr(self.keyboard_area, 'update_buttons'):
-                    self.keyboard_area.update_buttons()
+                # Set a flag to indicate we're in a programmatic resize
+                if not hasattr(self, '_in_resize'):
+                    self._in_resize = True
+                    
+                    # Update the keyboard buttons to match the new window size
+                    if hasattr(self.keyboard_area, 'update_buttons'):
+                        self.keyboard_area.update_buttons()
+                    
+                    # Clear the flag
+                    self._in_resize = False
             except Exception as e:
                 logger.error(f"Error updating keyboard in resize event: {e}")
+                self._in_resize = False
     
     # --- Close Event ---
     def closeEvent(self, event):

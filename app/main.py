@@ -2262,26 +2262,55 @@ class SinhalaWordApp(QMainWindow):
                         
                 elif key == Qt.Key_Space:
                     try:
-                        # When space is pressed, just hide the suggestions without selecting any
-                        # and insert a space character
-                        if self.current_suggestions:
+                        # Check if the buffer starts with a number
+                        buffer_text = "".join(self.buffer) if self.buffer else ""
+                        is_numeric_input = buffer_text and buffer_text[0].isdigit()
+                        
+                        # For numeric input, don't use the suggestion system
+                        if is_numeric_input:
+                            logger.info(f"Space pressed after numeric input: '{buffer_text}' - treating as regular input")
+                            # Just clear the buffer without committing
+                            self.buffer.clear()
+                            self.word_start_pos = None
+                            self.clear_suggestion_area()
+                            # Let the editor handle the space normally
+                            return False
+                        
+                        # When space is pressed with suggestions visible
+                        if self.suggestion_popup.isVisible() and self.current_suggestions:
                             # Hide the suggestion popup
                             self.suggestion_popup.hide()
                             # Clear suggestions
                             self.current_suggestions = []
-                            # Commit the buffer as is
+                            
+                            # Safely commit the buffer if it exists
                             if self.buffer:
-                                self.commit_buffer()
+                                # Make sure we have a valid word_start_pos before committing
+                                if self.word_start_pos is not None:
+                                    self.commit_buffer()
+                                else:
+                                    # If word_start_pos is None, just clear the buffer
+                                    logger.warning("Space pressed with buffer but no word_start_pos - clearing buffer")
+                                    self.buffer.clear()
+                            
                             # Insert a space
                             self.editor.insertPlainText(" ")
                             return True # Consume Space
                         else:
-                            # No suggestions, commit buffer if any and let space through
+                            # No visible suggestions, commit buffer if any and let space through
                             if self.buffer:
-                                self.commit_buffer()
+                                # Make sure we have a valid word_start_pos before committing
+                                if self.word_start_pos is not None:
+                                    self.commit_buffer()
+                                else:
+                                    # If word_start_pos is None, just clear the buffer
+                                    logger.warning("Space pressed with buffer but no word_start_pos - clearing buffer")
+                                    self.buffer.clear()
                             return False
                     except Exception as e:
                         logger.error(f"Error handling Space key: {e}")
+                        import traceback
+                        logger.error(f"Traceback: {traceback.format_exc()}")
                         self.reset_input_state()
                         return False
                         
@@ -2310,27 +2339,34 @@ class SinhalaWordApp(QMainWindow):
                     return True # Consume Up arrow
                     
                 elif Qt.Key_1 <= key <= Qt.Key_9:
-                    index = key - Qt.Key_1
-                    if index < len(self.current_suggestions):
-                        try:
-                            # Make a local copy of the suggestion to avoid race conditions
-                            sinhala_word = self.current_suggestions[index]
-                            
-                            # Log the selected suggestion
-                            logger.info(f"Selected suggestion {index+1}: '{sinhala_word}'")
-                            
-                            # Clear suggestions first to avoid race conditions
-                            self.clear_suggestion_area()
-                            # Accept the suggestion (this will also clear the buffer)
-                            self.accept_suggestion(sinhala_word)
-                            return True # Consume number key
-                        except Exception as e:
-                            logger.error(f"Error handling number key: {e}")
-                            logger.error(f"Exception details: {str(e)}")
-                            import traceback
-                            logger.error(f"Traceback: {traceback.format_exc()}")
-                            self.reset_input_state()
-                            return False
+                    # Only process number keys for suggestion selection when the popup is visible
+                    if self.suggestion_popup.isVisible():
+                        index = key - Qt.Key_1
+                        if index < len(self.current_suggestions):
+                            try:
+                                # Make a local copy of the suggestion to avoid race conditions
+                                sinhala_word = self.current_suggestions[index]
+                                
+                                # Log the selected suggestion
+                                logger.info(f"Selected suggestion {index+1}: '{sinhala_word}'")
+                                
+                                # Clear suggestions first to avoid race conditions
+                                self.clear_suggestion_area()
+                                # Accept the suggestion (this will also clear the buffer)
+                                self.accept_suggestion(sinhala_word)
+                                return True # Consume number key
+                            except Exception as e:
+                                logger.error(f"Error handling number key: {e}")
+                                logger.error(f"Exception details: {str(e)}")
+                                import traceback
+                                logger.error(f"Traceback: {traceback.format_exc()}")
+                                self.reset_input_state()
+                                return False
+                    else:
+                        # If popup is not visible, treat number keys as regular input
+                        # Let the alphanumeric handler below process it
+                        logger.info(f"Number key pressed but suggestion popup not visible - treating as regular input")
+                        return False
 
             # If Backspace is pressed, handle buffer modification
             if key == Qt.Key_Backspace:
@@ -2366,6 +2402,17 @@ class SinhalaWordApp(QMainWindow):
                 # Get current cursor position before any operations
                 current_pos = self.editor.textCursor().position()
                 
+                # Check if this is a numeric character starting a new buffer
+                is_numeric = text.isdigit()
+                is_new_buffer = not self.buffer
+                
+                # If this is a numeric character starting a new buffer, handle it differently
+                if is_numeric and is_new_buffer:
+                    # For numeric input at the start of a buffer, don't use suggestions
+                    logger.info(f"Numeric character at start of buffer: '{text}' - treating as regular input")
+                    # Let the editor handle it normally, don't add to buffer
+                    return False
+                
                 # Verify cursor position is where we expect it to be if buffer is not empty
                 if self.buffer and self.word_start_pos is not None:
                     expected_pos = self.word_start_pos + len(self.buffer)
@@ -2386,17 +2433,24 @@ class SinhalaWordApp(QMainWindow):
                 # Now append to buffer
                 self.buffer.append(text)
                 
-                # Update suggestions immediately after adding to buffer
-                if suggestions_enabled:
-                    # Cancel any pending suggestion updates
-                    if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
-                        self._suggestion_timer.stop()
-                    
-                    # Use a very short timer to ensure cursor position is stable
-                    self._suggestion_timer = QTimer()
-                    self._suggestion_timer.setSingleShot(True)
-                    self._suggestion_timer.timeout.connect(self.update_suggestion_area)
-                    self._suggestion_timer.start(10)  # Very short delay to avoid race conditions
+                # Check if the buffer now starts with a number
+                buffer_text = "".join(self.buffer)
+                if buffer_text and buffer_text[0].isdigit():
+                    # For buffers starting with numbers, don't show suggestions
+                    if suggestions_enabled:
+                        self.clear_suggestion_area()
+                else:
+                    # Update suggestions immediately after adding to buffer (only for non-numeric input)
+                    if suggestions_enabled:
+                        # Cancel any pending suggestion updates
+                        if hasattr(self, '_suggestion_timer') and self._suggestion_timer.isActive():
+                            self._suggestion_timer.stop()
+                        
+                        # Use a very short timer to ensure cursor position is stable
+                        self._suggestion_timer = QTimer()
+                        self._suggestion_timer.setSingleShot(True)
+                        self._suggestion_timer.timeout.connect(self.update_suggestion_area)
+                        self._suggestion_timer.start(10)  # Very short delay to avoid race conditions
                 
                 # Do NOT consume the event, let the editor insert the character
                 return False
@@ -2502,6 +2556,16 @@ class SinhalaWordApp(QMainWindow):
                 self.suggestion_popup.hide()
                 return
             
+            # Get the current word from buffer
+            current_word = "".join(self.buffer).lower()
+            
+            # Skip suggestion logic for numeric input
+            if current_word and current_word[0].isdigit():
+                logger.info(f"Numeric input detected: '{current_word}' - skipping suggestions")
+                self.suggestion_popup.hide()
+                self.current_suggestions = []  # Clear any existing suggestions
+                return
+            
             # Verify cursor position is still valid for this buffer
             current_pos = self.editor.textCursor().position()
             expected_pos = self.word_start_pos + len(self.buffer)
@@ -2511,8 +2575,6 @@ class SinhalaWordApp(QMainWindow):
                 logger.info(f"Cursor position mismatch in update_suggestion_area: expected {expected_pos}, got {current_pos}")
                 # Don't update suggestions if cursor is not where expected
                 return
-                
-            current_word = "".join(self.buffer).lower()
             
             # Use the transliterator to get suggestions
             self.current_suggestions = self.transliterator.get_suggestions(current_word, max_suggestions=9)
@@ -2566,13 +2628,11 @@ class SinhalaWordApp(QMainWindow):
             
         except Exception as e:
             logger.error(f"Error in update_suggestion_area: {e}")
-            logger.error(f"Exception details: {str(e)}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            
-            # Hide the popup in case of error
+            # Ensure popup is hidden on error
             self.suggestion_popup.hide()
-            self.suggestion_popup.hide()
+            self.current_suggestions = []
 
     def clear_suggestion_area(self):
         """Hide the suggestion popup and clear stored suggestions."""
@@ -2682,10 +2742,30 @@ class SinhalaWordApp(QMainWindow):
             
             # If Singlish is disabled or buffer is empty, don't process
             if not singlish_enabled or not self.buffer or self.word_start_pos is None:
+                # Always clear the buffer and reset word_start_pos for safety
+                self.buffer.clear()
+                self.word_start_pos = None
                 return
 
             word = "".join(self.buffer)
             logger.info(f"Committing buffer: '{word}' at position {self.word_start_pos}")
+
+            # Get the document for validation
+            doc = self.editor.document()
+            
+            # Validate word_start_pos before proceeding
+            if not isinstance(self.word_start_pos, int) or self.word_start_pos < 0 or self.word_start_pos >= doc.characterCount():
+                logger.warning(f"Invalid word_start_pos: {self.word_start_pos} (document length: {doc.characterCount()}) - aborting commit")
+                self.buffer.clear()
+                self.word_start_pos = None
+                return
+                
+            # Validate that the selection range is valid
+            if self.word_start_pos + len(word) > doc.characterCount():
+                logger.warning(f"Invalid selection range: start={self.word_start_pos}, length={len(word)}, doc length={doc.characterCount()} - aborting commit")
+                self.buffer.clear()
+                self.word_start_pos = None
+                return
 
             # Use the transliterator to get the Sinhala word
             sinhala_word = self.transliterator.transliterate(word)
@@ -2695,20 +2775,18 @@ class SinhalaWordApp(QMainWindow):
                 
             logger.info(f"Transliterated to: '{sinhala_word}'")
 
-            # Get the document and create a cursor for verification
-            doc = self.editor.document()
+            # Create a cursor for verification
             check_cursor = QTextCursor(doc)
             check_cursor.setPosition(self.word_start_pos)
             
-            # Verify the position is valid
-            if self.word_start_pos >= 0 and self.word_start_pos < doc.characterCount():
-                # Try to select the text that should match our buffer
-                check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
-                actual_text = check_cursor.selectedText()
-                
-                # Verify the text matches our buffer before replacing
-                if actual_text == word:
-                    # Text matches, do standard replacement
+            # Try to select the text that should match our buffer
+            check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
+            actual_text = check_cursor.selectedText()
+            
+            # Verify the text matches our buffer before replacing
+            if actual_text == word:
+                # Text matches, do standard replacement
+                try:
                     cur = self.editor.textCursor()
                     cur.beginEditBlock()
                     
@@ -2726,13 +2804,16 @@ class SinhalaWordApp(QMainWindow):
                     cur.endEditBlock()
                     
                     logger.info(f"Successfully replaced '{word}' with '{sinhala_word}'")
-                else:
-                    # Text doesn't match buffer - log the mismatch
-                    logger.warning(f"Buffer text '{word}' doesn't match document text '{actual_text}' - skipping replacement")
+                except Exception as inner_e:
+                    logger.error(f"Error during text replacement: {inner_e}")
+                    # Make sure we end the edit block even if there's an error
+                    if cur.isNull() == False:
+                        cur.endEditBlock()
             else:
-                logger.warning(f"Invalid word_start_pos: {self.word_start_pos} (document length: {doc.characterCount()})")
+                # Text doesn't match buffer - log the mismatch
+                logger.warning(f"Buffer text '{word}' doesn't match document text '{actual_text}' - skipping replacement")
 
-            # Clear the buffer and reset word_start_pos
+            # Always clear the buffer and reset word_start_pos
             self.buffer.clear()
             self.word_start_pos = None # Reset word_start_pos after committing
             

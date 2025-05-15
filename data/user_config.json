@@ -1,6 +1,6 @@
 {
     "theme": "dark",
-    "font": "Noto Serif Sinhala",
+    "font": "UN-Ganganee",
     "font_size": 28,
     "keyboard_font_size": 20,
     "window_size": [
@@ -10,5 +10,13 @@
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
-    "recent_files": []
+    "recent_files": [],
+    "splitter_state": [
+        290,
+        [
+            290,
+            336
+        ]
+    ],
+    "keyboard_height": 225
 }

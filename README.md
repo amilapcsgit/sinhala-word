@@ -6,8 +6,10 @@ Singlish→Sinhala transliterator, spell‑checker, suggestion popup, and an
 on‑screen Sinhala keyboard into a desktop‑class editor that runs on
 Windows, Linux, and macOS.
 
+![2025-05-15 09_59_08-Sinhala Word Processor](https://github.com/user-attachments/assets/ade6a12b-c127-45bb-aa83-137c6eefb814)
+
 **Why this project?** Native Sinhala editing tools are not customizable
-enough to shape in to the user's Singlish input style. Sinhala Word Py
+enough to shape into the user's Singlish input style. Sinhala Word Py
 aims to fill that gap with a hackable, cross‑platform, MIT‑licensed app
 that any developer can extend.
 
@@ -25,8 +27,8 @@ that any developer can extend.
   **Spell‑checker**   Underlines unknown words; context menu suggestions;
                       user dictionary
 
-  **Suggestion        Shows up to 9 completions under the caret; selectable
-  popup**             via 1‑9 / Tab / arrows
+  **Suggestion        shows up to 9 completions under the caret; selectable
+  popup**             via 1‑9 / Tab/arrows
 
   **Custom on‑screen  75+ keys, draggable dialog, resizable, theme‑aware,
   keyboard**          emits Qt key events
@@ -34,7 +36,7 @@ that any developer can extend.
   **Persistent        JSON‑backed: recent files, window & keyboard sizes,
   preferences**       theme, fonts
 
-  **Extensive         Python logging with rotating file handler for field
+  **Extensive         Python logging with rotating file handler for the field
   logging**           debugging
   -------------------------------------------------------------------------
 
@@ -42,9 +44,9 @@ that any developer can extend.
 
 \# 1. Clone & enter the repo
 
-\$ git clone https://github.com/\<your‑org\>/sinhala‑word‑py.git
+\$ git clone https://github.com/amilapcsgit/sinhala-word.git
 
-\$ cd sinhala‑word‑py
+\$ cd sinhala-word
 
 \# 2. Create venv (recommended)
 
@@ -90,7 +92,7 @@ pyenchant\>=3.2 \# spell‑checking backend
 
 -   **isort** for imports.
 
--   Follow *commitizen* Conventional Commits (e.g. feat: add detachable
+-   Follow *commitizen* Conventional Commits (e.g., feat: add detachable
     keyboard).
 
 **2. Logging**
@@ -124,11 +126,11 @@ pyenchant\>=3.2 \# spell‑checking backend
   **0.1 (quick wins)** Stabilise current • Remove duplicate method defs• Replace
                        code              broad except Exception with targeted
                                          errors & tracebacks• Throttle logging
-                                         inside hot paths
+                                         Inside hot paths
 
   **0.2                Split 2600‑line   • TransliterationManager•
   (modularisation)**   SinhalaWordApp    SpellCheckManager• KeyboardManager•
-                       into services     PreferencesManager
+                       into the services     PreferencesManager
 
   **0.3 (test          Prevent           • pytest for transliterator &
   harness)**           regressions       spell‑checker• pytest‑qt for GUI smoke
@@ -155,7 +157,7 @@ priorities.)*
 2.  Discuss major architectural changes before coding---see *Roadmap*
     above.
 
-3.  Small, focused PRs are easier to review than 1 000‑line megadiffs.
+3.  Small, focused PRs are easier to review than 1,000-line megadiffs.
 
 **Bug report template**
 
@@ -165,7 +167,7 @@ priorities.)*
 
 -   **Expected vs actual result**
 
--   **Log excerpt** (⇨ \~/.local/share/SinhalaWordPy/logs/...)
+-   **Log excerpt** (⇨ \~/.local/share/sinhala-word/logs/...)
 
 **📄 License**
 

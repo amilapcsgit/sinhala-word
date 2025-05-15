@@ -1,25 +1,14 @@
 {
     "theme": "dark",
-    "font": "Nirmala UI",
-    "font_size": 30,
+    "font": "Noto Serif Sinhala",
+    "font_size": 28,
+    "keyboard_font_size": 20,
     "window_size": [
-        1920,
-        1027
+        1280,
+        720
     ],
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
-    "recent_files": [
-        "C:/sinhalaword/test sinhala v6.txt"
-    ],
-    "keyboard_font_size": 20,
-    "keyboard_height": 225,
-    "keyboard_detached": false,
-    "splitter_state": [
-        703,
-        [
-            703,
-            230
-        ]
-    ]
+    "recent_files": []
 }

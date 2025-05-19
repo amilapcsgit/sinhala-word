@@ -135,18 +135,12 @@ def _phonetic_global(word: str) -> str:
 # ------------------------------------------------------------------
 #  Main window class
 # ------------------------------------------------------------------
-from enum import Enum
 
 # Import constants
 from ui.constants import (
     MIN_KB_FONT, MAX_KB_FONT, BASE_KB_HEIGHT, BASE_KB_FONT, 
     DEFAULT_KB_FONT_SIZE, DEFAULT_FONT_SIZE
 )
-
-class ResizeState(Enum):
-    IDLE = 0
-    USER = 1  # mouse/drag
-    PROGRAMMATIC = 2
 
 class SinhalaWordApp(QMainWindow):
     """
@@ -724,10 +718,7 @@ class SinhalaWordApp(QMainWindow):
             # 2. Keyboard is in a resize operation
             # 3. Keyboard has manual font size flag set
             
-            # Check if we're in a user-initiated resize
-            if hasattr(self, '_kb_resize_state') and self._kb_resize_state == ResizeState.USER:
-                logger.debug("Skipping automatic resize as we're in a user-initiated resize operation")
-                return
+            # User-initiated resize check removed (ResizeState enum no longer used)
                 
             # Check if the keyboard is in a manual resize operation
             if hasattr(self.keyboard_area, 'resize_in_progress') and self.keyboard_area.resize_in_progress:

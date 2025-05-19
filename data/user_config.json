@@ -2,7 +2,7 @@
     "theme": "dark",
     "font": "UN-Ganganee",
     "font_size": 28,
-    "keyboard_font_size": 20,
+    "keyboard_font_size": 19,
     "window_size": [
         1280,
         720
@@ -12,10 +12,10 @@
     "singlish_enabled": true,
     "recent_files": [],
     "splitter_state": [
-        290,
+        434,
         [
-            290,
-            336
+            434,
+            192
         ]
     ],
     "keyboard_height": 225

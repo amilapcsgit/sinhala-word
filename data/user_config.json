@@ -1,6 +1,6 @@
 {
     "theme": "dark",
-    "font": "VriSiNhala CN",
+    "font": "Noto Sans Sinhala",
     "font_size": 28,
     "keyboard_font_size": 19,
     "window_size": [
@@ -9,7 +9,7 @@
     ],
     "show_keyboard": true,
     "show_suggestions": true,
-    "singlish_enabled": false,
+    "singlish_enabled": true,
     "recent_files": [],
     "splitter_state": [
         434,

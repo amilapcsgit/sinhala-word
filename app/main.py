@@ -243,7 +243,7 @@ class SinhalaWordApp(QMainWindow):
         self.suggestions_toggle_action.setChecked(self.preferences["show_suggestions"]) 
         self.suggestions_toggle_action.triggered.connect(self.toggle_suggestions)
 
-        self.keyboard_toggle_action = QAction("Sinhala Keyboard", self, checkable=True)
+        self.keyboard_toggle_action = QAction("Keyboard: On" if self.preferences["show_keyboard"] else "Keyboard: Off", self, checkable=True)
         self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"]) 
         self.keyboard_toggle_action.triggered.connect(self.toggle_keyboard)
         self.keyboard_toggle_action.setIcon(self.create_icon("keyboard"))
@@ -1098,22 +1098,19 @@ class SinhalaWordApp(QMainWindow):
 
     def toggle_keyboard(self):
         """Toggle on-screen keyboard visibility."""
-        if self.keyboard_container.isVisible():
-            self.keyboard_container.hide()
-            self.keyboard_area.hide()
-            if hasattr(self, 'keyboard_toggle_action'):
-                # Keep the text as "Sinhala Keyboard" but update checked state
-                self.keyboard_toggle_action.setChecked(False)
-            # Update preferences
-            self.preferences["show_keyboard"] = False
-        else:
+        # Update action text based on checked state
+        if self.keyboard_toggle_action.isChecked():
+            self.keyboard_toggle_action.setText("Keyboard: On")
             self.keyboard_container.show()
             self.keyboard_area.show()
-            if hasattr(self, 'keyboard_toggle_action'):
-                # Keep the text as "Sinhala Keyboard" but update checked state
-                self.keyboard_toggle_action.setChecked(True)
             # Update preferences
             self.preferences["show_keyboard"] = True
+        else:
+            self.keyboard_toggle_action.setText("Keyboard: Off")
+            self.keyboard_container.hide()
+            self.keyboard_area.hide()
+            # Update preferences
+            self.preferences["show_keyboard"] = False
     
     def detach_keyboard(self):
         """Detach the keyboard to make it a floating window."""
@@ -1465,35 +1462,12 @@ class SinhalaWordApp(QMainWindow):
         self.toggles_toolbar = self.addToolBar("Features")
         self.toggles_toolbar.setObjectName("FeaturesToolbar")
 
-        # Create a custom widget for keyboard toggle with icon and text
-        keyboard_widget = QWidget()
-        keyboard_layout = QHBoxLayout(keyboard_widget)
-        keyboard_layout.setContentsMargins(5, 0, 5, 0)
-        keyboard_layout.setSpacing(5)
-
-        # Create the keyboard button with icon
-        keyboard_btn = QPushButton()
-        keyboard_btn.setIcon(self.create_icon("keyboard"))
-        keyboard_btn.setIconSize(QSize(24, 24))
-        keyboard_btn.setFixedSize(32, 32)
-        keyboard_btn.setCheckable(True)
-        keyboard_btn.setChecked(self.preferences["show_keyboard"])
-        keyboard_btn.setToolTip("Toggle Sinhala Keyboard")
-
-        # Create the label
-        keyboard_label = QLabel("Keyboard")
-        keyboard_label.setStyleSheet("font-size: 12px;")
-
-        # Add to layout
-        keyboard_layout.addWidget(keyboard_btn)
-        keyboard_layout.addWidget(keyboard_label)
-
-        # Connect the button to toggle_keyboard
-        keyboard_btn.clicked.connect(self.toggle_keyboard)
-
+        # Set tool button style to show both icon and text
+        self.toggles_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        
         # Add actions to the toggles toolbar
         self.toggles_toolbar.addAction(self.singlish_toggle_action)
-        self.toggles_toolbar.addWidget(keyboard_widget)  # Add our custom widget instead of the action
+        self.toggles_toolbar.addAction(self.keyboard_toggle_action)  # Use the action directly like other toggles
         self.toggles_toolbar.addAction(self.suggestions_toggle_action)
         self.toggles_toolbar.addSeparator()
         self.toggles_toolbar.addAction(self.toggle_theme_action)
@@ -3121,6 +3095,7 @@ class SinhalaWordApp(QMainWindow):
         self.suggestions_toggle_action.setText("Suggestions: On" if self.preferences["show_suggestions"] else "Suggestions: Off")
         
         self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"])
+        self.keyboard_toggle_action.setText("Keyboard: On" if self.preferences["show_keyboard"] else "Keyboard: Off")
         
         logger.info("Settings applied successfully")
 

@@ -30,8 +30,18 @@ that any developer can extend.
   **Suggestion        shows up to 9 completions under the caret; selectable
   popup**             via 1‑9 / Tab/arrows
 
-  **Custom on‑screen  75+ keys, draggable dialog, resizable, theme‑aware,
+  **Custom on‑screen  75+ keys, detachable, resizable, theme‑aware,
   keyboard**          emits Qt key events
+
+  **Multi-format      Open and save files in TXT, DOCX, and PDF formats.
+  Support**           Basic style preservation (font, size, bold, italic,
+                      underline, color) for DOCX.
+
+  **Recent Files      Quick access to recently opened documents.
+  Menu**
+
+  **Settings Dialog** Allows customization of theme, fonts, keyboard, and
+                      other application settings.
 
   **Persistent        JSON‑backed: recent files, window & keyboard sizes,
   preferences**       theme, fonts
@@ -62,11 +72,24 @@ that any developer can extend.
 
 \$ python main.py
 
-**Dependencies** (add these to requirements.txt if not present):
+**Dependencies**
 
+The application requires the following Python packages:
+
+*   `PySide6>=6.6`
+*   `python-docx` (for .docx file support)
+*   `reportlab` (for .pdf file support)
+*   `pypdf` (for .pdf file support)
+
+While the application has a mechanism to attempt to install `python-docx`, `reportlab`, and `pypdf` if missing, it is recommended to include all dependencies in your `requirements.txt` file for a smoother setup.
+
+Example `requirements.txt`:
+```
 PySide6\>=6.6
-
-pyenchant\>=3.2 \# spell‑checking backend
+python-docx
+reportlab
+pypdf
+```
 
 **🗂️ Project Layout**
 
@@ -141,8 +164,7 @@ pyenchant\>=3.2 \# spell‑checking backend
   (performance)**      load              updates• Switch INFO→WARNING in prod•
                                          Profile with pyinstrument
 
-  **0.5+ (features)**  Nice‑to‑haves     • Auto‑update via PyPI• Rich‑text export
-                                         (docx, pdf)• Hunspell dictionary
+  **0.5+ (features)**  Nice‑to‑haves     • Auto‑update via PyPI• Hunspell dictionary
                                          integration
   -------------------------------------------------------------------------------
 

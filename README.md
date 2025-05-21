@@ -30,8 +30,18 @@ that any developer can extend.
   **Suggestion        shows up to 9 completions under the caret; selectable
   popup**             via 1‑9 / Tab/arrows
 
-  **Custom on‑screen  75+ keys, draggable dialog, resizable, theme‑aware,
+  **Custom on‑screen  75+ keys, detachable, resizable, theme‑aware,
   keyboard**          emits Qt key events
+
+  **Multi-format      Open and save files in TXT, DOCX, and PDF formats.
+  Support**           Basic style preservation (font, size, bold, italic,
+                      underline, color) for DOCX.
+
+  **Recent Files      Quick access to recently opened documents.
+  Menu**
+
+  **Settings Dialog** Allows customization of theme, fonts, keyboard, and
+                      other application settings.
 
   **Persistent        JSON‑backed: recent files, window & keyboard sizes,
   preferences**       theme, fonts
@@ -42,47 +52,76 @@ that any developer can extend.
 
 **🚀 Quick Start**
 
-\# 1. Clone & enter the repo
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/amilapcsgit/sinhala-word.git
+    cd sinhala-word
+    ```
 
-\$ git clone https://github.com/amilapcsgit/sinhala-word.git
+2.  **Create and activate a virtual environment (recommended):**
+    ```bash
+    python -m venv .venv
+    # On Windows:
+    # .venv\Scripts\activate
+    # On macOS/Linux:
+    source .venv/bin/activate
+    ```
 
-\$ cd sinhala-word
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-\# 2. Create venv (recommended)
+4.  **Run the application:**
+    ```bash
+    python run.py
+    ```
 
-\$ python -m venv .venv
+**Dependencies**
 
-\$ source .venv/bin/activate \# Windows: .venv\\Scripts\\activate
+The application relies on the following Python packages, which are listed in `requirements.txt`:
 
-\# 3. Install runtime dependencies
+*   `PySide6`: For the main application framework and GUI.
+*   `PySide6-Fluent-Widgets`: For modern UI elements.
+*   `python-docx`: For opening and saving Microsoft Word (.docx) files.
+*   `reportlab`: For exporting documents to PDF (.pdf) format.
+*   `pypdf`: For reading PDF (.pdf) files.
+*   `pyinstaller`: Used for packaging the application into an executable (typically a development/build dependency).
 
-\$ pip install -r requirements.txt \# see below if the file is missing
-
-\# 4. Run the app
-
-\$ python main.py
-
-**Dependencies** (add these to requirements.txt if not present):
-
-PySide6\>=6.6
-
-pyenchant\>=3.2 \# spell‑checking backend
+It is highly recommended to install these using the provided `requirements.txt` file:
+```bash
+pip install -r requirements.txt
+```
+While the application includes a mechanism to dynamically attempt to install `python-docx`, `reportlab`, and `pypdf` if they are not found at runtime, relying on the `requirements.txt` file ensures a smoother and more predictable setup.
 
 **🗂️ Project Layout**
 
-├── main.py \# QApplication & SinhalaWordApp (main window)
-
-├── keyboard.py \# SinhalaKeyboard widget
-
-├── transliterator.py \# (planned) pure‑logic transliteration engine
-
-├── spellcheck.py \# (planned) spell‑checker helpers
-
-├── config.py \# (planned) persistence helpers
-
-├── resources/ \# icons, fonts, style sheets
-
-└── tests/ \# pytest & pytest‑qt suites (to be added)
+├── README.md
+├── run.py                # Main execution script for the application
+├── requirements.txt      # Project dependencies
+├── app/                  # Core application logic
+│   ├── __init__.py
+│   ├── main.py           # Handles QApplication & the SinhalaWordApp main window
+│   ├── config.py         # Manages user preferences and configurations
+│   ├── input_handler.py  # Processes input events for transliteration
+│   ├── spellchecker.py   # Implements Sinhala spell-checking logic
+│   └── transliterator.py # Handles Singlish to Sinhala transliteration
+├── ui/                   # User interface components
+│   ├── __init__.py
+│   ├── constants.py      # UI related constants
+│   ├── font_manager.py   # Manages application fonts
+│   ├── icons.py          # Provides access to toolbar icons
+│   ├── keyboard.py       # SinhalaKeyboard widget implementation
+│   ├── settings_dialog.py # Application settings dialog
+│   ├── suggestion_popup.py # UI for transliteration suggestions
+│   └── theme_manager.py  # Manages light/dark themes
+├── data/                 # User-specific data
+│   ├── sinhalawordmap.json # Main Singlish-Sinhala mapping file
+│   └── user_config.json  # Stores user preferences
+├── resources/            # Static assets (fonts, dictionary)
+│   ├── dictionary/       # Spell-checking dictionary files (compressed chunks)
+│   └── fonts/            # Bundled Sinhala Unicode fonts
+└── .vscode/              # VSCode specific settings (optional)
 
 **🛠️ Development Guide**
 
@@ -141,8 +180,7 @@ pyenchant\>=3.2 \# spell‑checking backend
   (performance)**      load              updates• Switch INFO→WARNING in prod•
                                          Profile with pyinstrument
 
-  **0.5+ (features)**  Nice‑to‑haves     • Auto‑update via PyPI• Rich‑text export
-                                         (docx, pdf)• Hunspell dictionary
+  **0.5+ (features)**  Nice‑to‑haves     • Auto‑update via PyPI• Hunspell dictionary
                                          integration
   -------------------------------------------------------------------------------
 

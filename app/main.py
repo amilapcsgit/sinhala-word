@@ -1,4 +1,4 @@
-# Sinhala Word Processor — PySide6 (v5.3 - Enhanced)
+# Sinhala Word Processor — PySide6 (v5.4 - Multi-Format)
 """
 A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent UI:
 
@@ -7,11 +7,11 @@ A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent 
 • **Basic spell‑checker** — unknown Sinhala words are underlined red
 • **Two classic toolbars** (Standard & Formatting) ‑or‑ hide them and use the menu
 • **Dark / Light theme toggle** (View → Toggle Theme) - Enhanced implementation
-• Plain‑text load/save functionality.
+• **Multi-format support** — Open and save files in TXT, DOCX, and PDF formats
 
 Install dependencies:
 ```bash
-pip install PySide6 PySide6-Fluent-Widgets
+pip install PySide6 PySide6-Fluent-Widgets python-docx reportlab pypdf
 ```
 
 Run:
@@ -21,7 +21,7 @@ python SinhalaWordProcessor_simple.py
 
 Pack as EXE:
 ```bash
-pyinstaller --noconfirm --onefile --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor_simple.py
+pyinstaller --noconfirm --onefile --hidden-import=docx --hidden-import=reportlab --hidden-import=pypdf --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor_simple.py
 ```
 """
 import sys
@@ -30,6 +30,24 @@ import json
 import re
 import gzip
 import logging
+
+# --- Dynamic dependency bootstrap ---------------------------------
+import importlib.util, subprocess, sys, logging
+log = logging.getLogger(__name__)
+_REQS = {
+    "python-docx": "docx",
+    "reportlab": "reportlab",
+    "pypdf": "pypdf",
+}
+
+def _ensure_deps():
+    for pip_name, mod_name in _REQS.items():
+        if importlib.util.find_spec(mod_name) is None:
+            log.warning(f"Missing '{pip_name}', installing…")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+
+_ensure_deps()
+# ------------------------------------------------------------------
 
 # Allow limited font fallbacks for better compatibility
 # We'll handle font fallbacks more carefully in the code
@@ -2061,7 +2079,7 @@ class SinhalaWordApp(QMainWindow):
         self.setWindowTitle("Sinhala Word Processor")
 
     def open_file(self):
-        """Opens a plain-text file in the editor."""
+        """Opens a file in the editor with support for multiple formats (txt, docx, pdf)."""
         # Ask to save changes if there's content in the editor
         if self.editor.document().isModified():
             reply = QMessageBox.question(
@@ -2081,17 +2099,28 @@ class SinhalaWordApp(QMainWindow):
         if self.preferences["recent_files"] and os.path.exists(os.path.dirname(self.preferences["recent_files"][0])):
             initial_dir = os.path.dirname(self.preferences["recent_files"][0])
 
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_path, selected_filter = QFileDialog.getOpenFileName(
             self, 
             "Open File", 
             initial_dir, 
-            "Text Files (*.txt);;All Files (*)"
+            "Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
         )
 
         if file_path:
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    self.editor.setPlainText(f.read())
+                # Determine file type based on extension
+                file_ext = os.path.splitext(file_path)[1].lower()
+                
+                # Read content based on file type
+                if file_ext == '.docx':
+                    content = read_docx_file(file_path)
+                elif file_ext == '.pdf':
+                    content = read_pdf_file(file_path)
+                else:  # Default to text file
+                    content = read_text_file(file_path)
+                
+                # Set the content in the editor
+                self.editor.setPlainText(content)
 
                 # Add to recent files
                 self.preferences = config.add_recent_file(self.preferences, file_path)
@@ -2107,12 +2136,15 @@ class SinhalaWordApp(QMainWindow):
 
                 # Perform spell check on the loaded file
                 self.spell_check_timer.start(500)  # Start spell check after 500ms
+            except ImportError as e:
+                QMessageBox.critical(self, "Missing Dependency", f"{e}\nPlease restart the application to install required dependencies.")
+                logger.error(f"Dependency error opening file: {e}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not open file:\n{e}")
                 logger.error(f"Error opening file: {e}")
 
     def save_file(self):
-        """Saves the current editor content to a plain-text file."""
+        """Saves the current editor content to a file with support for multiple formats (txt, docx, pdf)."""
         # Check if we have a current file path from recent files
         current_file = None
         if self.windowTitle() != "Sinhala Word Processor":
@@ -2127,11 +2159,24 @@ class SinhalaWordApp(QMainWindow):
         if current_file and os.path.exists(current_file):
             # Save to the current file
             try:
-                with open(current_file, "w", encoding="utf-8") as f:
-                    f.write(self.editor.toPlainText())
+                content = self.editor.toPlainText()
+                file_ext = os.path.splitext(current_file)[1].lower()
+                
+                # Write content based on file type
+                if file_ext == '.docx':
+                    write_docx_file(current_file, content)
+                elif file_ext == '.pdf':
+                    write_pdf_file(current_file, content)
+                else:  # Default to text file
+                    write_text_file(current_file, content)
+                
                 logger.info(f"Saved file: {os.path.basename(current_file)}")
                 self.editor.document().setModified(False)
                 return True
+            except ImportError as e:
+                QMessageBox.critical(self, "Missing Dependency", f"{e}\nPlease restart the application to install required dependencies.")
+                logger.error(f"Dependency error saving file: {e}")
+                return False
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not save file:\n{e}")
                 logger.error(f"Error saving file: {e}")
@@ -2141,23 +2186,45 @@ class SinhalaWordApp(QMainWindow):
             return self.save_as_file()
 
     def save_as_file(self):
-        """Save the current editor content to a new file."""
+        """Save the current editor content to a new file with support for multiple formats (txt, docx, pdf)."""
         # Get the directory of the most recently saved file, if any
         initial_dir = ""
         if self.preferences["recent_files"] and os.path.exists(os.path.dirname(self.preferences["recent_files"][0])):
             initial_dir = os.path.dirname(self.preferences["recent_files"][0])
 
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, selected_filter = QFileDialog.getSaveFileName(
             self, 
             "Save File As", 
             initial_dir, 
-            "Text Files (*.txt);;All Files (*)"
+            "Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
         )
 
         if file_path:
             try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(self.editor.toPlainText())
+                content = self.editor.toPlainText()
+                
+                # Determine file type based on extension
+                file_ext = os.path.splitext(file_path)[1].lower()
+                
+                # If no extension was provided, add one based on the selected filter
+                if not file_ext:
+                    if "Word Documents" in selected_filter:
+                        file_path += ".docx"
+                        file_ext = ".docx"
+                    elif "PDF Files" in selected_filter:
+                        file_path += ".pdf"
+                        file_ext = ".pdf"
+                    elif "Text Files" in selected_filter:
+                        file_path += ".txt"
+                        file_ext = ".txt"
+                
+                # Write content based on file type
+                if file_ext == '.docx':
+                    write_docx_file(file_path, content)
+                elif file_ext == '.pdf':
+                    write_pdf_file(file_path, content)
+                else:  # Default to text file
+                    write_text_file(file_path, content)
 
                 # Add to recent files
                 self.preferences = config.add_recent_file(self.preferences, file_path)
@@ -2172,6 +2239,10 @@ class SinhalaWordApp(QMainWindow):
                 logger.info(f"Saved file as: {os.path.basename(file_path)}")
                 self.editor.document().setModified(False)
                 return True
+            except ImportError as e:
+                QMessageBox.critical(self, "Missing Dependency", f"{e}\nPlease restart the application to install required dependencies.")
+                logger.error(f"Dependency error saving file: {e}")
+                return False
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not save file:\n{e}")
                 logger.error(f"Error saving file: {e}")
@@ -3106,6 +3177,79 @@ class SinhalaWordApp(QMainWindow):
         
         logger.info("Settings applied successfully")
 
+
+# ------------------------------------------------------------------
+#  File Format Handlers
+# ------------------------------------------------------------------
+def read_text_file(file_path):
+    """Read content from a plain text file."""
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+def write_text_file(file_path, content):
+    """Write content to a plain text file."""
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+def read_docx_file(file_path):
+    """Read content from a DOCX file."""
+    try:
+        import docx
+        doc = docx.Document(file_path)
+        return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    except ImportError:
+        log.error("python-docx module not available")
+        raise ImportError("Could not import python-docx module")
+
+def write_docx_file(file_path, content):
+    """Write content to a DOCX file."""
+    try:
+        import docx
+        doc = docx.Document()
+        
+        # Split content by newlines and add each paragraph
+        for paragraph in content.split('\n'):
+            if paragraph.strip():  # Skip empty paragraphs
+                doc.add_paragraph(paragraph)
+                
+        doc.save(file_path)
+    except ImportError:
+        log.error("python-docx module not available")
+        raise ImportError("Could not import python-docx module")
+
+def read_pdf_file(file_path):
+    """Read content from a PDF file."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        return text
+    except ImportError:
+        log.error("pypdf module not available")
+        raise ImportError("Could not import pypdf module")
+
+def write_pdf_file(file_path, content):
+    """Write content to a PDF file."""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph
+        from reportlab.lib.styles import getSampleStyleSheet
+        
+        doc = SimpleDocTemplate(file_path, pagesize=letter)
+        styles = getSampleStyleSheet()
+        
+        # Split content by newlines and create paragraphs
+        paragraphs = []
+        for line in content.split('\n'):
+            if line.strip():  # Skip empty lines
+                paragraphs.append(Paragraph(line, styles['Normal']))
+                
+        doc.build(paragraphs)
+    except ImportError:
+        log.error("reportlab module not available")
+        raise ImportError("Could not import reportlab module")
 
 # ------------------------------------------------------------------
 #  Main function

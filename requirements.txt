@@ -1,3 +1,6 @@
 PySide6
 PySide6-Fluent-Widgets
+python-docx
+reportlab
+pypdf
 pyinstaller

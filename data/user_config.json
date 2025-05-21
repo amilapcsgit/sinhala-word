@@ -1,8 +1,8 @@
 {
     "theme": "dark",
-    "font": "Noto Sans Sinhala",
+    "font": "winnie",
     "font_size": 28,
-    "keyboard_font_size": 19,
+    "keyboard_font_size": 20,
     "window_size": [
         1280,
         720
@@ -10,12 +10,14 @@
     "show_keyboard": true,
     "show_suggestions": true,
     "singlish_enabled": true,
-    "recent_files": [],
+    "recent_files": [
+        "C:/sinhalaword/test font.txt"
+    ],
     "splitter_state": [
-        434,
+        399,
         [
-            434,
-            192
+            399,
+            227
         ]
     ],
     "keyboard_height": 225

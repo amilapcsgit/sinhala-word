@@ -2821,12 +2821,15 @@ class SinhalaWordApp(QMainWindow):
         # Get the current text
         text = self.editor.toPlainText()
 
-        # Clear existing spell check formatting
+        # --- clear previous red underlines, but KEEP existing fonts ---
         cursor = self.editor.textCursor()
+        cursor.beginEditBlock()
         cursor.select(QTextCursor.Document)
-        fmt = QTextCharFormat()
-        cursor.setCharFormat(fmt)
+        clr_fmt = QTextCharFormat()
+        clr_fmt.setUnderlineStyle(QTextCharFormat.NoUnderline)
+        cursor.mergeCharFormat(clr_fmt)   # was: cursor.setCharFormat(fmt)
         cursor.clearSelection()
+        cursor.endEditBlock()
 
         # Find all Sinhala words and check them
         sinhala_word_pattern = re.compile(r'[\u0D80-\u0DFF]+')
@@ -2838,10 +2841,14 @@ class SinhalaWordApp(QMainWindow):
                 cursor.setPosition(match.start())
                 cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(word))
 
-                fmt = QTextCharFormat()
-                fmt.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
-                fmt.setUnderlineColor(QColor("red"))
-                cursor.mergeCharFormat(fmt)
+                error_fmt = QTextCharFormat()
+                error_fmt.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
+                error_fmt.setUnderlineColor(QColor("red"))
+                
+                # add red underline to misspelled range
+                cursor.beginEditBlock()
+                cursor.mergeCharFormat(error_fmt)     # keep as merge, not set
+                cursor.endEditBlock()
 
     def suggestions(self, prefix: str, limit: int = 9):
         """Get a list of suggestions for a given prefix from the dictionary."""

@@ -61,6 +61,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
+from pathlib import Path
+from docx import Document
+from docx.shared import Pt, RGBColor
 
 # Import our custom modules
 from ui.keyboard import SinhalaKeyboard
@@ -1588,15 +1591,17 @@ class SinhalaWordApp(QMainWindow):
         """Toggle underline formatting for selected text."""
         cursor = self.editor.textCursor()
         if cursor.hasSelection():
-            format = QTextCharFormat()
-            format.setFontUnderline(self.underline_action.isChecked())
-            cursor.mergeCharFormat(format)
+            fmt = QTextCharFormat()
+            # Use the same explicit flag toggle approach
+            fmt.setFontUnderline(not cursor.charFormat().fontUnderline())
+            cursor.mergeCharFormat(fmt)
             self.editor.setTextCursor(cursor)
         else:
             # If no selection, set the state for future typing
-            format = self.editor.currentCharFormat()
-            format.setFontUnderline(self.underline_action.isChecked())
-            self.editor.setCurrentCharFormat(format)
+            fmt = self.editor.currentCharFormat()
+            # Use the same explicit flag toggle approach
+            fmt.setFontUnderline(not fmt.fontUnderline())
+            self.editor.setCurrentCharFormat(fmt)
     
     def update_format_actions(self):
         """Update the state of formatting actions based on current cursor position."""
@@ -1839,8 +1844,21 @@ class SinhalaWordApp(QMainWindow):
 
                 # Open the file
                 try:
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        self.editor.setPlainText(f.read())
+                    # Determine file type based on extension
+                    file_ext = os.path.splitext(filepath)[1].lower()
+                    
+                    # Read content based on file type
+                    if file_ext == '.docx':
+                        self._load_docx_into_editor(filepath)  # NEW
+                        self.current_file = filepath
+                        self.editor.document().setModified(False)
+                        self.statusBar().showMessage("Loaded DOCX with styles", 2000)
+                    elif file_ext == '.pdf':
+                        content = read_pdf_file(filepath)
+                        self.editor.setPlainText(content)
+                    else:  # Default to text file
+                        with open(filepath, "r", encoding="utf-8") as f:
+                            self.editor.setPlainText(f.read())
 
                     # Update window title
                     self.setWindowTitle(f"Sinhala Word Processor - {os.path.basename(filepath)}")
@@ -1853,6 +1871,9 @@ class SinhalaWordApp(QMainWindow):
                     self.update_recent_files_menu()
 
                     logger.info(f"Opened recent file: {filepath}")
+                except ImportError as e:
+                    QMessageBox.critical(self, "Missing Dependency", f"{e}\nPlease restart the application to install required dependencies.")
+                    logger.error(f"Dependency error opening file: {e}")
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Could not open file:\n{e}")
                     logger.error(f"Error opening recent file: {e}")
@@ -2078,6 +2099,33 @@ class SinhalaWordApp(QMainWindow):
         # Reset window title
         self.setWindowTitle("Sinhala Word Processor")
 
+    # ---------- DOCX reader that keeps styles ------------------------------
+    def _load_docx_into_editor(self, path: str):
+        """Clear the editor and re-create the DOCX with fonts / bold / italic / underline."""
+        docx = Document(path)
+        self.editor.clear()
+        cursor: QTextCursor = self.editor.textCursor()
+        for para in docx.paragraphs:
+            for run in para.runs:
+                fmt = QTextCharFormat()
+                qf = QFont()
+                # family / size
+                if run.font.name:
+                    qf.setFamily(run.font.name)
+                if run.font.size:
+                    qf.setPointSizeF(run.font.size.pt)  # python-docx size → pt
+                # inline styles
+                # --- replace the three style setters ------------------------
+                qf.setBold(bool(run.bold))  # was: qf.setBold(run.bold)
+                qf.setItalic(bool(run.italic))  # was: qf.setItalic(run.italic)
+                qf.setUnderline(bool(run.underline))  # was: qf.setUnderline(run.underline)
+                # ------------------------------------------------------------
+                fmt.setFont(qf)
+                fmt.setFontUnderline(bool(run.underline))  # ← ADD: explicit underline flag on QTextCharFormat
+                cursor.setCharFormat(fmt)
+                cursor.insertText(run.text)
+            cursor.insertBlock()  # paragraph break
+    
     def open_file(self):
         """Opens a file in the editor with support for multiple formats (txt, docx, pdf)."""
         # Ask to save changes if there's content in the editor
@@ -2103,7 +2151,7 @@ class SinhalaWordApp(QMainWindow):
             self, 
             "Open File", 
             initial_dir, 
-            "Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
+            "All Supported Files (*.txt *.docx *.pdf);;Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
         )
 
         if file_path:
@@ -2113,7 +2161,11 @@ class SinhalaWordApp(QMainWindow):
                 
                 # Read content based on file type
                 if file_ext == '.docx':
-                    content = read_docx_file(file_path)
+                    self._load_docx_into_editor(file_path)  # NEW
+                    self.current_file = file_path
+                    self.editor.document().setModified(False)
+                    self.statusBar().showMessage("Loaded DOCX with styles", 2000)
+                    return
                 elif file_ext == '.pdf':
                     content = read_pdf_file(file_path)
                 else:  # Default to text file
@@ -2159,16 +2211,14 @@ class SinhalaWordApp(QMainWindow):
         if current_file and os.path.exists(current_file):
             # Save to the current file
             try:
-                content = self.editor.toPlainText()
                 file_ext = os.path.splitext(current_file)[1].lower()
                 
-                # Write content based on file type
-                if file_ext == '.docx':
-                    write_docx_file(current_file, content)
-                elif file_ext == '.pdf':
-                    write_pdf_file(current_file, content)
-                else:  # Default to text file
-                    write_text_file(current_file, content)
+                # Use the new _do_save method
+                try:
+                    self._do_save(current_file)
+                except Exception as err:
+                    QMessageBox.critical(self, "Save error", str(err))
+                    return False
                 
                 logger.info(f"Saved file: {os.path.basename(current_file)}")
                 self.editor.document().setModified(False)
@@ -2196,7 +2246,7 @@ class SinhalaWordApp(QMainWindow):
             self, 
             "Save File As", 
             initial_dir, 
-            "Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
+            "All Supported Files (*.txt *.docx *.pdf);;Text Files (*.txt);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)"
         )
 
         if file_path:
@@ -2218,13 +2268,12 @@ class SinhalaWordApp(QMainWindow):
                         file_path += ".txt"
                         file_ext = ".txt"
                 
-                # Write content based on file type
-                if file_ext == '.docx':
-                    write_docx_file(file_path, content)
-                elif file_ext == '.pdf':
-                    write_pdf_file(file_path, content)
-                else:  # Default to text file
-                    write_text_file(file_path, content)
+                # Use the new _do_save method
+                try:
+                    self._do_save(file_path)
+                except Exception as err:
+                    QMessageBox.critical(self, "Save error", str(err))
+                    return False
 
                 # Add to recent files
                 self.preferences = config.add_recent_file(self.preferences, file_path)
@@ -2249,6 +2298,66 @@ class SinhalaWordApp(QMainWindow):
                 return False
 
         return False
+
+    def _save_docx(self, path: str):
+        try:
+            qdoc = self.editor.document()
+            docx = Document()
+            block = qdoc.begin()
+            
+            while block != qdoc.end():
+                p = docx.add_paragraph()
+                it = block.begin()
+                
+                while not it.atEnd():
+                    frag = it.fragment()
+                    if not frag.isValid():
+                        it += 1
+                        continue
+                        
+                    text = frag.text()
+                    if text == "":
+                        it += 1
+                        continue
+                        
+                    fmt = frag.charFormat()
+                    qf = fmt.font()
+                    run = p.add_run(text)
+                    
+                    # font family / size
+                    run.font.name = qf.family() or self.base_font.family()
+                    run.font.size = Pt(qf.pointSizeF() or self.base_font.pointSizeF())
+                    
+                    # inline styles
+                    run.bold = qf.bold()
+                    run.italic = qf.italic()
+                    run.underline = fmt.fontUnderline()  # replace run.underline = qf.underline()
+                    
+                    # colour
+                    col = fmt.foreground().color()
+                    if col.isValid():
+                        run.font.color.rgb = RGBColor(col.red(), col.green(), col.blue())
+                        
+                    it += 1
+                    
+                block = block.next()
+                
+            docx.save(path)  # <-- if this raises, we catch below
+            
+        except Exception as e:
+            QMessageBox.critical(self, "DOCX export failed", str(e))
+            raise  # Re-raise to be caught by the outer try-except
+
+    def _do_save(self, path: str):
+        ext = Path(path).suffix.lower()
+        if ext == ".docx":
+            self._save_docx(path)  # call the new safe writer
+        elif ext == ".pdf":
+            content = self.editor.toPlainText()
+            write_pdf_file(path, content)
+        else:  # Default to text file
+            content = self.editor.toPlainText()
+            write_text_file(path, content)
 
     def handle_keypress_event(self, obj, event):
         """Handle keypress events for the editor."""
@@ -2892,15 +3001,16 @@ class SinhalaWordApp(QMainWindow):
         # Get the current text
         text = self.editor.toPlainText()
 
-        # --- clear previous red underlines, but KEEP existing fonts ---
-        cursor = self.editor.textCursor()
-        cursor.beginEditBlock()
-        cursor.select(QTextCursor.Document)
-        clr_fmt = QTextCharFormat()
-        clr_fmt.setUnderlineStyle(QTextCharFormat.NoUnderline)
-        cursor.mergeCharFormat(clr_fmt)   # was: cursor.setCharFormat(fmt)
-        cursor.clearSelection()
-        cursor.endEditBlock()
+        # --- We'll skip clearing underlines entirely ---
+        # This way, we won't interfere with any manual formatting
+        # The spell checker will just add red underlines to misspelled words
+        
+        # Store the current cursor position and selection
+        old_cursor = self.editor.textCursor()
+        old_position = old_cursor.position()
+        old_anchor = old_cursor.anchor()
+        
+        # We'll let the spell checker add its underlines without clearing anything
 
         # Find all Sinhala words and check them
         sinhala_word_pattern = re.compile(r'[\u0D80-\u0DFF]+')
@@ -3201,18 +3311,92 @@ def read_docx_file(file_path):
         log.error("python-docx module not available")
         raise ImportError("Could not import python-docx module")
 
-def write_docx_file(file_path, content):
-    """Write content to a DOCX file."""
+def write_docx_file(file_path, qtext_document):
+    """Write content to a DOCX file with preserved formatting.
+    
+    Args:
+        file_path: Path to save the DOCX file
+        qtext_document: QTextDocument containing the formatted text
+    """
     try:
-        import docx
-        doc = docx.Document()
+        from docx import Document
+        from docx.shared import Pt, RGBColor
         
-        # Split content by newlines and add each paragraph
-        for paragraph in content.split('\n'):
-            if paragraph.strip():  # Skip empty paragraphs
-                doc.add_paragraph(paragraph)
+        # Create a new document
+        docx = Document()
+        
+        # If we received a string instead of a QTextDocument (for backward compatibility)
+        if isinstance(qtext_document, str):
+            # Fall back to the old behavior
+            for paragraph in qtext_document.split('\n'):
+                if paragraph.strip():  # Skip empty paragraphs
+                    docx.add_paragraph(paragraph)
+            docx.save(file_path)
+            return
+            
+        # Process the QTextDocument to preserve formatting
+        block = qtext_document.begin()
+        
+        while block != qtext_document.end():
+            # Create a new paragraph for each text block
+            p = docx.add_paragraph()
+            
+            # Get paragraph alignment
+            block_format = block.blockFormat()
+            if hasattr(block_format, 'alignment'):
+                alignment = block_format.alignment()
+                # Map Qt alignment to python-docx alignment
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                if alignment == Qt.AlignLeft:
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                elif alignment == Qt.AlignRight:
+                    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                elif alignment == Qt.AlignCenter:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                elif alignment == Qt.AlignJustify:
+                    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            
+            # Process each text fragment in the block
+            it = block.begin()
+            while not it.atEnd():
+                frag = it.fragment()
+                if frag.isValid():
+                    fmt = frag.charFormat()
+                    text = frag.text()
+                    
+                    # Skip empty fragments
+                    if text.strip():
+                        run = p.add_run(text)
+                        
+                        # Set font family and size
+                        if fmt.fontFamily():
+                            run.font.name = fmt.fontFamily()
+                        
+                        # Set font size (default to 12pt if not specified)
+                        font_size = fmt.fontPointSize()
+                        if font_size > 0:
+                            run.font.size = Pt(font_size)
+                        else:
+                            run.font.size = Pt(12)
+                        
+                        # Set bold, italic, underline
+                        run.bold = fmt.fontWeight() > 50  # QFont.Normal is 50
+                        run.italic = fmt.fontItalic()
+                        run.underline = fmt.fontUnderline()
+                        
+                        # Set text color if valid
+                        color = fmt.foreground().color()
+                        if color.isValid():
+                            run.font.color.rgb = RGBColor(color.red(), color.green(), color.blue())
                 
-        doc.save(file_path)
+                it += 1
+            
+            # Move to the next block
+            block = block.next()
+        
+        # Save the document
+        docx.save(file_path)
+        
     except ImportError:
         log.error("python-docx module not available")
         raise ImportError("Could not import python-docx module")

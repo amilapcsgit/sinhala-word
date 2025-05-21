@@ -1,6 +1,6 @@
 {
-    "theme": "dark",
-    "font": "winnie",
+    "theme": "light",
+    "font": "Iskoola Pota",
     "font_size": 28,
     "keyboard_font_size": 20,
     "window_size": [
@@ -11,8 +11,11 @@
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [
-        "C:/sinhalaword/First docx.docx",
+        "C:/sinhalaword/3rd.docx",
         "C:/sinhalaword/first pdf.pdf",
+        "C:/sinhalaword/sinhala export.docx",
+        "C:/sinhalaword/2nd docx.docx",
+        "C:/sinhalaword/First docx.docx",
         "C:/sinhalaword/test font.txt"
     ],
     "splitter_state": [

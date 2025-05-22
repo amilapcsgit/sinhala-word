@@ -36,8 +36,9 @@ import importlib.util, subprocess, sys, logging
 log = logging.getLogger(__name__)
 _REQS = {
     "python-docx": "docx",
-    "reportlab": "reportlab",
+    "reportlab": "reportlab", # reportlab is still needed for now if _do_save calls it for other types.
     "pypdf": "pypdf",
+    "PySide6.QtPrintSupport": "PySide6.QtPrintSupport" # Added QPrinter dependency
 }
 
 def _ensure_deps():
@@ -2353,8 +2354,8 @@ class SinhalaWordApp(QMainWindow):
         if ext == ".docx":
             self._save_docx(path)  # call the new safe writer
         elif ext == ".pdf":
-            content = self.editor.toPlainText()
-            write_pdf_file(path, content)
+            document = self.editor.document()
+            write_pdf_file(path, document)
         else:  # Default to text file
             content = self.editor.toPlainText()
             write_text_file(path, content)
@@ -3414,26 +3415,32 @@ def read_pdf_file(file_path):
         log.error("pypdf module not available")
         raise ImportError("Could not import pypdf module")
 
-def write_pdf_file(file_path, content):
-    """Write content to a PDF file."""
+def write_pdf_file(file_path, qtext_document):
+    """Write content to a PDF file using Qt's QPrinter."""
     try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Paragraph
-        from reportlab.lib.styles import getSampleStyleSheet
-        
-        doc = SimpleDocTemplate(file_path, pagesize=letter)
-        styles = getSampleStyleSheet()
-        
-        # Split content by newlines and create paragraphs
-        paragraphs = []
-        for line in content.split('\n'):
-            if line.strip():  # Skip empty lines
-                paragraphs.append(Paragraph(line, styles['Normal']))
-                
-        doc.build(paragraphs)
+        from PySide6.QtPrintSupport import QPrinter
+        from PySide6.QtGui import QPageSize # For standard page sizes
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(file_path)
+       
+        # Set page size to A4
+        pageSize = QPageSize(QPageSize.PageSizeId.A4)
+        printer.setPageSize(pageSize)
+       
+        # It's good practice to set page margins (optional, but often desired)
+        # printer.setPageMargins(15, 15, 15, 15, QPrinter.Millimeter) # Example: 15mm margins
+
+        qtext_document.print_(printer)
+        log.info(f"Successfully wrote PDF to {file_path} using QPrinter")
+
     except ImportError:
-        log.error("reportlab module not available")
-        raise ImportError("Could not import reportlab module")
+        log.error("PySide6.QtPrintSupport QPrinter module not available")
+        raise ImportError("Could not import QPrinter from PySide6.QtPrintSupport")
+    except Exception as e:
+        log.error(f"Error writing PDF with QPrinter: {e}")
+        raise e # Re-raise the exception to be caught by the caller
 
 # ------------------------------------------------------------------
 #  Main function

@@ -1,5 +1,5 @@
 {
-    "theme": "light",
+    "theme": "dark",
     "font": "Iskoola Pota",
     "font_size": 28,
     "keyboard_font_size": 20,
@@ -11,8 +11,11 @@
     "show_suggestions": true,
     "singlish_enabled": true,
     "recent_files": [
-        "C:/sinhalaword/3rd.docx",
+        "C:/sinhalaword/2.pdf",
         "C:/sinhalaword/first pdf.pdf",
+        "C:/sinhalaword/print a4.pdf",
+        "C:/sinhalaword/sinhala export.pdf",
+        "C:/sinhalaword/3rd.docx",
         "C:/sinhalaword/sinhala export.docx",
         "C:/sinhalaword/2nd docx.docx",
         "C:/sinhalaword/First docx.docx",

@@ -38,6 +38,8 @@ ICON_PATHS = {
     'bold': "M 4 2 L 4 14 L 10 14 C 11.657 14 13 12.657 13 11 C 13 9.8 12.326 8.756 11.336 8.219 C 11.758 7.709 12 7.083 12 6.4 C 12 4.525 10.475 3 8.6 3 L 4 3 L 4 2 z M 6 4 L 8.6 4 C 9.37 4 10 4.63 10 5.4 C 10 6.17 9.37 6.8 8.6 6.8 L 6 6.8 L 6 4 z M 6 8.8 L 9 8.8 C 9.77 8.8 10.4 9.43 10.4 10.2 C 10.4 10.97 9.77 11.6 9 11.6 L 6 11.6 L 6 8.8 z",
     'italic': "M 7 2 L 7 4 L 9 4 L 6 12 L 4 12 L 4 14 L 11 14 L 11 12 L 9 12 L 12 4 L 14 4 L 14 2 L 7 2 z",
     'underline': "M 4 2 L 4 9 C 4 11.761 6.239 14 9 14 C 11.761 14 14 11.761 14 9 L 14 2 L 12 2 L 12 9 C 12 10.657 10.657 12 9 12 C 7.343 12 6 10.657 6 9 L 6 2 L 4 2 z M 2 15 L 2 16 L 16 16 L 16 15 L 2 15 z",
+    'print': "M 4 2 C 3.448 2 3 2.448 3 3 L 3 6 L 13 6 L 13 3 C 13 2.448 12.552 2 12 2 L 4 2 z M 3 7 L 3 12 C 3 12.552 3.448 13 4 13 L 12 13 C 12.552 13 13 12.552 13 12 L 13 7 L 3 7 z M 5 8 L 11 8 L 11 9 L 5 9 L 5 8 z M 5 10 L 11 10 L 11 11 L 5 11 L 5 10 z M 4 14 L 12 14 L 12 15 L 4 15 L 4 14 z",
+    'print-preview': "M 10.5 2 C 10.223 2 10 2.223 10 2.5 L 10 3 L 11.5 3 C 11.777 3 12 3.223 12 3.5 L 12 6 L 13 6 L 13 3 C 13 2.448 12.552 2 12 2 L 10.5 2 z M 3 3 C 2.448 3 2 3.448 2 4 L 2 7 L 9 7 L 9 4 C 9 3.448 8.552 3 8 3 L 3 3 z M 2 8 L 2 13 C 2 13.552 2.448 14 3 14 L 8 14 C 8.552 14 9 13.552 9 13 L 9 8 L 2 8 z M 4 9 L 7 9 L 7 10 L 4 10 L 4 9 z M 4 11 L 7 11 L 7 12 L 4 12 L 4 11 z M 10.5 7 C 9.12 7 8 8.12 8 9.5 C 8 10.88 9.12 12 10.5 12 C 11.88 12 13 10.88 13 9.5 C 13 8.12 11.88 7 10.5 7 z M 10.5 8 C 11.33 8 12 8.67 12 9.5 C 12 10.33 11.33 11 10.5 11 C 9.67 11 9 10.33 9 9.5 C 9 8.67 9.67 8 10.5 8 z M 12.5 11.5 L 14 13 L 13 14 L 11.5 12.5 L 12.5 11.5 z",
 }
 
 # Define theme colors
@@ -222,6 +224,22 @@ def create_icon(icon_name, size=32, color=THEME_COLORS['light']):
         painter.drawText(QRectF(0, 0, 16, 14), Qt.AlignCenter, "U")
         # Draw the underline
         painter.drawLine(4, 14, 12, 14)
+    elif icon_name == "print":
+        # Simple printer icon
+        painter.setBrush(color)
+        painter.drawRect(3, 6, 10, 6) # Printer body
+        painter.drawRect(4, 2, 8, 4)  # Paper slot
+        painter.setBrush(Qt.NoBrush)
+        painter.drawLine(3, 10, 13, 10) # Output tray line
+    elif icon_name == "print-preview":
+        # Printer icon
+        painter.setBrush(color)
+        painter.drawRect(2, 5, 8, 5)  # Printer body
+        painter.drawRect(3, 2, 6, 3)  # Paper slot
+        # Magnifying glass
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(8, 7, 5, 5) # Magnifying glass circle
+        painter.drawLine(12, 11, 14, 13) # Magnifying glass handle
     else:
         # Draw a fallback question mark if icon name has no specific drawing
         painter.setFont(QFont("Arial", 10, QFont.Bold))

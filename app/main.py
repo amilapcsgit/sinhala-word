@@ -1,4 +1,4 @@
-# Sinhala Word Processor — PySide6 (v5.4 - Multi-Format)
+# Sinhala Word 2025 — v6.1 - Multi-Format with Printing Support
 """
 A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent UI:
 
@@ -7,7 +7,16 @@ A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent 
 • **Basic spell‑checker** — unknown Sinhala words are underlined red
 • **Two classic toolbars** (Standard & Formatting) ‑or‑ hide them and use the menu
 • **Dark / Light theme toggle** (View → Toggle Theme) - Enhanced implementation
-• **Multi-format support** — Open and save files in TXT, DOCX, and PDF formats
+• **Multi-format support** — Open and save files in TXT, DOCX, and PDF formats and print them
+• **Sinhala keyboard** (on-screen) - Optional, can be hidden behind the main window for convenience
+• **On-Screen Keyboard** (optional) - Can be toggled via View → Toggle Keyboard
+• **Settings dialog** (accessible via File → Preferences)
+• **Customizable font settings**
+• **User dictionary management** — Add/edit/delete entries directly from the app
+• **Automatic line wrapping** — Text wraps automatically at the end of each line
+• **Line numbers** — Display line numbers alongside text for easy reference
+• **Font size adjustment** — Easily adjust font size using toolbar buttons or shortcut keys
+• **Undo/Redo functionality** — Undo and redo changes made to the document easily
 
 Install dependencies:
 ```bash
@@ -16,12 +25,12 @@ pip install PySide6 PySide6-Fluent-Widgets python-docx reportlab pypdf
 
 Run:
 ```bash
-python SinhalaWordProcessor_simple.py
+python run.py
 ```
 
 Pack as EXE:
 ```bash
-pyinstaller --noconfirm --onefile --hidden-import=docx --hidden-import=reportlab --hidden-import=pypdf --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" SinhalaWordProcessor_simple.py
+pyinstaller --noconfirm --onefile --hidden-import=docx --hidden-import=reportlab --hidden-import=pypdf --add-data "sinhalawordmap.json;." --add-data "dictionary;dictionary" run.py
 ```
 """
 import sys
@@ -58,8 +67,9 @@ from PySide6.QtWidgets import (
     QApplication, QTextEdit, QFileDialog, QToolBar, QWidget, QVBoxLayout,
     QFontComboBox, QComboBox, QMessageBox, QStatusBar, QLabel, 
     QFrame, QInputDialog, QMainWindow, QPushButton, QHBoxLayout, QSizePolicy,
-    QStyledItemDelegate, QMenu, QSplitter
+    QStyledItemDelegate, QMenu, QSplitter, QDialog
 )
+from PySide6.QtPrintSupport import QPrintDialog, QPrinter, QPrintPreviewDialog
 from PySide6.QtGui import QFont, QTextCursor, QTextCharFormat, QColor, QAction, QIcon, QFontDatabase
 from PySide6.QtCore import Qt, QPoint, QTimer, QEvent, Slot, QSize, QObject
 from pathlib import Path
@@ -131,9 +141,9 @@ def load_sinhala_fonts():
 # Phonetic fallback definitions
 VOW = {"aa":"ා","a":"","ae":"ැ","aae":"ෑ","i":"ි","ii":"ී","u":"ු","uu":"ූ",
        "ru":"ෘ","ruu":"ෲ","e":"ෙ","ee":"ේ","o":"ො","oo":"ෝ","au":"ෞ","":""}
-CONS = {"kh":"ඛ","gh":"ඝ","chh":"ඡ","jh":"ඣ","th":"ඨ","dh":"ඪ","ph":"ඵ","bh":"භ",
+CONS = {"kh":"ඛ","gh":"ඝ","chh":"ඡ","jh":"ඣ","th":"ත","dh":"ද","ph":"ඵ","bh":"භ",
         "sh":"ශ","ss":"ෂ","ng":"ඟ","ny":"ඤ","t":"ට","d":"ඩ","n":"ණ","p":"ප","b":"බ",
-        "m":"ම","k":"ක","g":"ග","c":"ච","j":"ජ","l":"ල","w":"ව","v":"ව","y":"ය","r":"ර",
+        "m":"ම","k":"ක","g":"ග","c":"ච","j":"ජ","l":"ල","w":"ව","v":"වැ","y":"ය","r":"ර",
         "s":"ස","h":"හ","f":"ෆ","lh":"ළ","":""}
 _RE_CON = re.compile("|".join(sorted(CONS, key=len, reverse=True)))
 VOW_INIT = {"a":"අ","aa":"ආ","ae":"ඇ","aae":"ඈ","i":"ඉ","ii":"ඊ","u":"උ","uu":"ඌ",
@@ -1082,6 +1092,21 @@ class SinhalaWordApp(QMainWindow):
         self.addAction(self.redo_action)
         self.addAction(self.toggle_theme_action)
 
+        # Print actions
+        self.print_action = QAction("Print...", self)
+        self.print_action.setShortcut("Ctrl+P")
+        self.print_action.triggered.connect(self.print_document)
+        self.print_action.setIcon(self.create_icon("print"))
+        self.print_action.setProperty("icon_name", "print")
+        self.addAction(self.print_action)
+
+        self.print_preview_action = QAction("Print Preview...", self)
+        # No default shortcut for print preview, but can be added if desired
+        self.print_preview_action.triggered.connect(self.print_preview_document)
+        self.print_preview_action.setIcon(self.create_icon("print-preview"))
+        self.print_preview_action.setProperty("icon_name", "print-preview")
+        self.addAction(self.print_preview_action)
+
 # This is a duplicate method - removing it
 
     def toggle_toolbars(self):
@@ -1353,6 +1378,8 @@ class SinhalaWordApp(QMainWindow):
         self.standard_toolbar.addAction(self.new_action)
         self.standard_toolbar.addAction(self.open_action)
         self.standard_toolbar.addAction(self.save_action)
+        self.standard_toolbar.addAction(self.print_action)
+        self.standard_toolbar.addAction(self.print_preview_action)
         self.standard_toolbar.addSeparator()
         self.standard_toolbar.addAction(self.cut_action)
         self.standard_toolbar.addAction(self.copy_action)
@@ -1880,6 +1907,10 @@ class SinhalaWordApp(QMainWindow):
         self.save_as_action.setShortcut("Ctrl+Shift+S")
         self.save_as_action.triggered.connect(self.save_as_file)
         file_menu.addAction(self.save_as_action)
+
+        # Add Print and Print Preview actions
+        file_menu.addAction(self.print_action)
+        file_menu.addAction(self.print_preview_action)
 
         # Add Recent Files submenu
         file_menu.addSeparator()
@@ -3169,6 +3200,54 @@ class SinhalaWordApp(QMainWindow):
 
         # Accept the close event
         event.accept()
+
+    def print_document(self):
+        """Handles printing the document."""
+        try:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            print_dialog = QPrintDialog(printer, self)
+            print_dialog.setWindowTitle("Print Document")
+
+            if print_dialog.exec() == QDialog.Accepted:
+                document = self.editor.document()
+                document.print_(printer)
+                logger.info("Document sent to printer.")
+                QMessageBox.information(self, "Print", "Document sent to printer.")
+            else:
+                logger.info("Print canceled by user.")
+                QMessageBox.information(self, "Print", "Print canceled.")
+        except Exception as e:
+            logger.error(f"Error during printing: {e}")
+            QMessageBox.critical(self, "Print Error", f"An error occurred while trying to print:\n{e}")
+
+    def print_preview_document(self):
+        """Shows a print preview dialog for the document."""
+        try:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            preview_dialog = QPrintPreviewDialog(printer, self)
+            preview_dialog.setWindowTitle("Print Preview")
+            preview_dialog.paintRequested.connect(self.handle_paint_request)
+            
+            # Set the size of the preview dialog (optional, but can be useful)
+            # Get screen geometry to make it responsive
+            screen_geometry = QApplication.primaryScreen().geometry()
+            preview_dialog.resize(screen_geometry.width() * 0.7, screen_geometry.height() * 0.7)
+            
+            preview_dialog.exec()
+            logger.info("Print preview dialog shown.")
+        except Exception as e:
+            logger.error(f"Error during print preview: {e}")
+            QMessageBox.critical(self, "Print Preview Error", f"An error occurred while trying to show print preview:\n{e}")
+
+    def handle_paint_request(self, printer):
+        """Handles the paintRequested signal from QPrintPreviewDialog."""
+        try:
+            document = self.editor.document()
+            document.print_(printer)
+            logger.info("Document painted to print preview dialog.")
+        except Exception as e:
+            logger.error(f"Error painting document to preview: {e}")
+            QMessageBox.critical(self, "Paint Error", f"An error occurred while painting the document for preview:\n{e}")
 
     def _load_dictionaries(self):
         """Loads the main lexicon and user-defined dictionary."""

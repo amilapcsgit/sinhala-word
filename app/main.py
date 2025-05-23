@@ -298,6 +298,11 @@ class SinhalaWordApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Sinhala Word Processor")
         self.resize(1100, 780)
+        # Set application icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                                "resources", "splash", "sinhalaword_icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
     def init_status_bar(self):
         """Initialize the status bar."""
@@ -3508,6 +3513,12 @@ def main():
 
     # Create QApplication
     app = QApplication(sys.argv)
+    
+    # Set application icon
+    icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                           "resources", "splash", "sinhalaword_icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     
     # Set application-wide font policy to allow system fonts for English text
     default_font = QFont()

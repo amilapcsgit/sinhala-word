@@ -1,16 +1,17 @@
 {
-    "theme": "dark",
+    "theme": "light",
     "font": "Iskoola Pota",
     "font_size": 28,
     "keyboard_font_size": 20,
     "window_size": [
-        1280,
-        720
+        1388,
+        966
     ],
     "show_keyboard": true,
     "show_suggestions": true,
-    "singlish_enabled": true,
+    "singlish_enabled": false,
     "recent_files": [
+        "C:/sinhalaword/icon.docx",
         "C:/sinhalaword/2.pdf",
         "C:/sinhalaword/first pdf.pdf",
         "C:/sinhalaword/print a4.pdf",

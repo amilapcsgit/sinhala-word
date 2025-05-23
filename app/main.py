@@ -133,26 +133,62 @@ VOW = {"aa":"ා","a":"","ae":"ැ","aae":"ෑ","i":"ි","ii":"ී","u":"ු","
        "ru":"ෘ","ruu":"ෲ","e":"ෙ","ee":"ේ","o":"ො","oo":"ෝ","au":"ෞ","":""}
 CONS = {"kh":"ඛ","gh":"ඝ","chh":"ඡ","jh":"ඣ","th":"ඨ","dh":"ඪ","ph":"ඵ","bh":"භ",
         "sh":"ශ","ss":"ෂ","ng":"ඟ","ny":"ඤ","t":"ට","d":"ඩ","n":"ණ","p":"ප","b":"බ",
-        "m":"ම","k":"ක","g":"ග","c":"ච","j":"ජ","l":"ල","w":"ව","y":"ය","r":"ර",
+        "m":"ම","k":"ක","g":"ග","c":"ච","j":"ජ","l":"ල","w":"ව","v":"ව","y":"ය","r":"ර",
         "s":"ස","h":"හ","f":"ෆ","lh":"ළ","":""}
 _RE_CON = re.compile("|".join(sorted(CONS, key=len, reverse=True)))
 VOW_INIT = {"a":"අ","aa":"ආ","ae":"ඇ","aae":"ඈ","i":"ඉ","ii":"ඊ","u":"උ","uu":"ඌ",
             "e":"එ","ee":"ඒ","o":"ඔ","oo":"ඕ","au":"ඖ"}
 
 def _phonetic_global(word: str) -> str:
-    """Global phonetic fallback function."""
-    t, out = word.lower(), ""
+    source_word_lower = word.lower()
+    t = source_word_lower
+    out_parts = [] # Use a list to build output, then join
+
+    # Ensure logger is available or defined if used within this function like:
+    # logger = logging.getLogger("SinhalaWordProcessor") # If not globally available
+
     while t:
         match = _RE_CON.match(t)
         c = match.group(0) if match else ""
-        t = t[len(c):]
-        v = next((vv for vv in sorted(VOW, key=len, reverse=True) if t.startswith(vv)), "")
-        t = t[len(v):]
-        if c:
-            out += CONS[c] + VOW[v]
+        
+        # Determine string remaining after potential consonant match
+        remaining_after_c = t[len(c):]
+        
+        v = ""
+        # If no consonant was matched (c=""), search for initial vowel in t itself.
+        # If a consonant was matched (c!=""), search for a subsequent vowel in remaining_after_c.
+        string_to_search_vowel_in = remaining_after_c if c else t
+
+        if string_to_search_vowel_in: # Ensure we are not searching in an empty string for a vowel
+             v = next((vv for vv in sorted(VOW, key=len, reverse=True) if string_to_search_vowel_in.startswith(vv)), "")
+
+        if c: # Consonant matched
+            out_parts.append(CONS[c])
+            out_parts.append(VOW[v]) # VOW[v] is safe, as VOW[""] results in an empty string
+            # Advance t: remove consumed consonant part, then consumed vowel part from that remainder
+            t = remaining_after_c[len(v):]
+        elif v: # No consonant, but an initial vowel matched
+            out_parts.append(VOW_INIT.get(v, v)) # Use VOW_INIT for initial vowels, default to v itself
+            # Advance t: remove consumed initial vowel part from original t
+            t = t[len(v):] 
         else:
-            out += VOW_INIT.get(v, v)
-    return out or word
+            # No initial consonant (c) and no initial vowel (v) were matched from the current start of t.
+            # This means t[0] is an unhandled character.
+            if t: # Should always be true here because of the 'while t:' condition
+                # Append the unhandled character as is to the output.
+                out_parts.append(t[0]) 
+                # Advance t by one character to ensure progress and prevent an infinite loop.
+                t = t[1:]
+            else: 
+                # This case should ideally not be reached if 'while t:' correctly gates the loop.
+                break # Safeguard to exit if t somehow became empty here.
+
+    result = "".join(out_parts)
+    # Return the original word (as passed, not lowercased) if the phonetic conversion results in an empty string.
+    # Or, stick to returning the processed (lowercased) word if output is empty.
+    # The original code was `return out or word` (original case word).
+    # Let's be consistent: if phonetic is empty, return original input `word`.
+    return result if result else word
 
 # ------------------------------------------------------------------
 #  Main window class
@@ -178,65 +214,83 @@ class SinhalaWordApp(QMainWindow):
     """
     # We don't need the resize state anymore with QSplitter
     def __init__(self):
-        # --- Load User Preferences ---
+        # Call the init methods in the correct order
+        self.init_preferences()
+        self.init_font_manager()
+        self.init_core_attributes()
+        self.init_theme_manager()
+        self.init_window_setup() # Calls super().__init__()
+        self.init_core_ui_widgets() # Initializes self.editor
+        self.init_suggestion_handling() # Now safe to create SuggestionPopup
+        self.init_status_bar()
+        self.init_dictionaries_and_modules()
+        self.init_actions_and_shortcuts()
+        self.init_keyboard()
+        self.init_ui_layout_and_theme()
+        self.init_event_handlers_and_timers()
+        self.init_menu_and_toolbars()
+
+    def init_preferences(self):
+        """Initialize user preferences."""
         self.preferences = config.load_user_preferences()
 
-        # --- Initialize Font Manager ---
+    def init_font_manager(self):
+        """Initialize the font manager and base font."""
         self.font_manager = FontManager()
         self.font_manager.update_from_preferences(self.preferences)
-        
-        # Get the list of available fonts for UI components
         self.sinhala_font_families = self.font_manager.get_available_fonts()
-        
-        # Create the base font using the font manager
         self.base_font = self.font_manager.get_font()
-        
-        # --- Initialize Core Attributes FIRST ---
+
+    def init_core_attributes(self):
+        """Initialize core application attributes."""
         self.MAIN_LEXICON = {}
         self.USER_MAP = {}
         self.MAP = {}
         self.USER_MAP_FP = config.USER_DICT_FILE
         self.SAVE_PENDING = False
 
-        # --- Suggestion State ---
+    def init_suggestion_handling(self):
+        """Initialize suggestion handling mechanisms."""
         self.buffer = []
-        self.word_start_pos = None # Position in the document where the current word started
-        self.current_suggestions = [] # Store current suggestions for fixed area
-        
+        self.word_start_pos = None  # Position in the document where the current word started
+        self.current_suggestions = []  # Store current suggestions for fixed area
+
         # Initialize suggestion timer
         self._suggestion_timer = QTimer()
         self._suggestion_timer.setSingleShot(True)
         self._suggestion_timer.timeout.connect(self.update_suggestion_area)
 
-        # --- Theme Manager ---
+        # --- Suggestion Popup (Near Cursor) ---
+        # Create a popup widget for suggestions
+        self.suggestion_popup = SuggestionPopup(self)
+        self.suggestion_popup.suggestionSelected.connect(self.accept_suggestion)
+
+        # Hide the popup initially
+        self.suggestion_popup.hide()
+
+        # Log that we've created the suggestion area
+        logger.info("Created suggestion label")
+
+    def init_theme_manager(self):
+        """Initialize the theme manager."""
         self.theme_manager = ThemeManager()
         # Set theme from preferences
         if self.preferences["theme"] == "dark":
             self.theme_manager.current_theme = "dark"
 
-        # --- Create Core Widgets ---
+    def init_core_ui_widgets(self):
+        """Initialize core UI widgets like the editor."""
         self.editor = QTextEdit()
         self.editor.setFont(self.base_font)
 
-        # --- Call Superclass Initializer ---
+    def init_window_setup(self):
+        """Perform basic window setup."""
         super().__init__()
-
-        # --- Suggestion Popup (Near Cursor) ---
-        # Create a popup widget for suggestions
-        self.suggestion_popup = SuggestionPopup(self)
-        self.suggestion_popup.suggestionSelected.connect(self.accept_suggestion)
-        
-        # Hide the popup initially
-        self.suggestion_popup.hide()
-        
-        # Log that we've created the suggestion area
-        logger.info("Created suggestion label")
-
-        # --- Basic Window Setup ---
         self.setWindowTitle("Sinhala Word Processor")
         self.resize(1100, 780)
 
-        # --- Status Bar for QMainWindow ---
+    def init_status_bar(self):
+        """Initialize the status bar."""
         self.status = self.statusBar()
         self.lineCol = QLabel("Ln 1, Col 1")
         self.wordCount = QLabel("Words: 0")
@@ -245,155 +299,110 @@ class SinhalaWordApp(QMainWindow):
         self.status.addPermanentWidget(self.wordCount)
         self.status.addPermanentWidget(self.themeLbl)
 
-        # --- Load Dictionaries ---
-        self._load_dictionaries() # Call load method
-
-        # --- Initialize Transliterator and Spellchecker ---
+    def init_dictionaries_and_modules(self):
+        """Load dictionaries and initialize transliterator and spellchecker."""
+        self._load_dictionaries()  # Call load method
         self.transliterator = SinhalaTransliterator(self.MAP)
         self.spellchecker = SinhalaSpellChecker(self.MAP)
 
-        # --- Initialize Actions ---
+    def init_actions_and_shortcuts(self):
+        """Initialize actions, shortcuts, and toggle actions."""
         self.build_shortcuts()  # Initialize shortcuts and actions
 
         # --- Create Toggle Actions ---
         # These need to be created before building menus and toolbars
         self.singlish_toggle_action = QAction("Singlish: On" if self.preferences["singlish_enabled"] else "Singlish: Off", self, checkable=True)
-        self.singlish_toggle_action.setChecked(self.preferences["singlish_enabled"]) 
+        self.singlish_toggle_action.setChecked(self.preferences["singlish_enabled"])
         self.singlish_toggle_action.triggered.connect(self.toggle_singlish)
 
         self.suggestions_toggle_action = QAction("Suggestions: On" if self.preferences["show_suggestions"] else "Suggestions: Off", self, checkable=True)
-        self.suggestions_toggle_action.setChecked(self.preferences["show_suggestions"]) 
+        self.suggestions_toggle_action.setChecked(self.preferences["show_suggestions"])
         self.suggestions_toggle_action.triggered.connect(self.toggle_suggestions)
 
         self.keyboard_toggle_action = QAction("Keyboard: On" if self.preferences["show_keyboard"] else "Keyboard: Off", self, checkable=True)
-        self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"]) 
+        self.keyboard_toggle_action.setChecked(self.preferences["show_keyboard"])
         self.keyboard_toggle_action.triggered.connect(self.toggle_keyboard)
         self.keyboard_toggle_action.setIcon(self.create_icon("keyboard"))
         self.keyboard_toggle_action.setProperty("icon_name", "keyboard")
 
-        # --- On-screen Keyboard Area ---
-        # Create the Sinhala keyboard using our custom implementation with dark mode support
-        # Initialize with dark mode based on current theme and default font size
+    def init_keyboard(self):
+        """Initialize the on-screen keyboard."""
         is_dark_mode = self.theme_manager.is_dark_mode()
-        
-        # Get keyboard font size from preferences or use default
         keyboard_font_size = self.preferences.get("keyboard_font_size", DEFAULT_KB_FONT_SIZE)
-        
-        # Ensure the font size is within valid range
+
         if keyboard_font_size < MIN_KB_FONT or keyboard_font_size > MAX_KB_FONT:
             keyboard_font_size = DEFAULT_KB_FONT_SIZE
-            self.preferences["keyboard_font_size"] = keyboard_font_size  # Update preferences
+            self.preferences["keyboard_font_size"] = keyboard_font_size
             logging.warning(f"Invalid keyboard font size detected, reset to {keyboard_font_size}")
-        
-        # Log the keyboard font size being used
+
         logging.info(f"Using keyboard font size: {keyboard_font_size}")
 
-        # Create the Sinhala keyboard instance
         try:
-            # Create the keyboard directly with the parent
-            # No need to pass font_size - it will get it from the FontManager
             self.keyboard_area = SinhalaKeyboard(parent=self, dark_mode=is_dark_mode)
-
-            # Connect the key press signal if available
             if hasattr(self.keyboard_area, 'keyPressed'):
                 self.keyboard_area.keyPressed.connect(self.on_keyboard_button_clicked)
 
-            # Calculate appropriate height based on font size using the keyboard's helper method
             if hasattr(self.keyboard_area, 'height_for_font'):
                 keyboard_height = self.keyboard_area.height_for_font(keyboard_font_size)
                 logging.info(f"Calculated keyboard height: {keyboard_height} based on font size: {keyboard_font_size}")
             else:
-                # Fallback calculation if the method is not available
                 from ui.constants import BASE_KB_HEIGHT, BASE_KB_FONT
                 keyboard_height = int((keyboard_font_size / BASE_KB_FONT) * BASE_KB_HEIGHT)
                 logging.info(f"Using fallback height calculation: {keyboard_height} for font size: {keyboard_font_size}")
             
-            # Ensure the keyboard has a reasonable size before we start
             self.keyboard_area.resize(self.width(), keyboard_height)
-            
-            # Force an update of the buttons after initialization
             if hasattr(self.keyboard_area, 'update_buttons'):
-                # Give the layout a chance to initialize first
                 QTimer.singleShot(100, self.keyboard_area.update_buttons)
-                
-            # Log successful keyboard creation
             logging.info(f"Created Sinhala keyboard with font size: {keyboard_font_size}")
-
         except Exception as e:
             logging.error(f"Error creating Sinhala keyboard: {e}")
-            # Create an empty widget as a fallback
             self.keyboard_area = QWidget(self)
-            self.keyboard_area.setFixedHeight(100)  # Small fixed height
+            self.keyboard_area.setFixedHeight(100)
             logging.warning("Created empty widget as keyboard placeholder due to error")
 
-        # Apply initial theme - ensure consistent application
+    def init_ui_layout_and_theme(self):
+        """Initialize UI layout, splitter, and apply theme."""
         self.apply_theme_to_all_widgets()
-        
-        # Update combo box styles based on theme
         self.update_combo_box_styles()
-        
-        # Update icons for the current theme
         self.update_icons_for_theme(self.theme_manager.current_theme)
 
-        # --- Finalize UI Setup ---
-        # Create a central widget and layout to hold the editor and suggestion area
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for better space usage
-        main_layout.setSpacing(0)  # Remove spacing
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # Note: The suggestion popup is not added to the layout as it's a popup widget
         logger.info("Created suggestion popup widget")
-        
-        # Create a splitter to hold the editor and keyboard
+
         self.main_splitter = QSplitter(Qt.Vertical)
-        
-        # Add editor to the splitter
         self.main_splitter.addWidget(self.editor)
-        
-        # Create keyboard container
+
         self.keyboard_container = QWidget()
-        
-        # Get saved keyboard height from preferences or use default
         default_keyboard_height = 264
-        
-        # Log the current preferences
         logging.info(f"Keyboard preferences: height={self.preferences.get('keyboard_height', 'not set')}, "
-                    f"font_size={self.preferences.get('keyboard_font_size', 'not set')}")
+                     f"font_size={self.preferences.get('keyboard_font_size', 'not set')}")
         
-        # Get saved height but limit it to a reasonable value (25% of screen height - reduced from 30%)
         screen = self.screen()
         if screen:
             screen_height = screen.availableGeometry().height()
             screen_width = screen.availableGeometry().width()
             logging.info(f"Screen dimensions: {screen_width}x{screen_height}")
-            
-            # More conservative height limit (25% of screen)
             max_keyboard_height = int(screen_height * 0.25)
-            
-            # Get saved height with validation
             saved_height = self.preferences.get("keyboard_height", default_keyboard_height)
-            
-            # Validate saved height (must be positive and reasonable)
             if saved_height <= 0 or saved_height > screen_height:
                 logging.warning(f"Invalid saved keyboard height: {saved_height}, using default")
                 saved_height = default_keyboard_height
-                
-            # Apply the limit
             keyboard_height = min(saved_height, max_keyboard_height)
             logging.info(f"Using keyboard height: {keyboard_height} (saved: {saved_height}, max: {max_keyboard_height})")
         else:
             keyboard_height = self.preferences.get("keyboard_height", default_keyboard_height)
             logging.info(f"No screen info available, using keyboard height: {keyboard_height}")
-        
-        # No minimum height constraint for full responsiveness
+
         self.keyboard_container.setMinimumHeight(10)
         
-        # Create a splitter handle effect by adding a frame at the top of the keyboard container
         splitter_handle = QFrame(self.keyboard_container)
         splitter_handle.setFrameShape(QFrame.HLine)
         splitter_handle.setFrameShadow(QFrame.Sunken)
-        splitter_handle.setFixedHeight(8)  # Make it a bit taller for easier grabbing
+        splitter_handle.setFixedHeight(8)
         splitter_handle.setStyleSheet("""
             QFrame {
                 background-color: #cccccc;
@@ -405,115 +414,84 @@ class SinhalaWordApp(QMainWindow):
                 border: 1px solid #999999;
             }
         """)
-        # Set up the keyboard container with a simple layout
         self.keyboard_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.keyboard_container.setMinimumHeight(80)  # Minimum height for visibility
+        self.keyboard_container.setMinimumHeight(80)
         self.keyboard_container.setObjectName("keyboard_container")
-        
-        # Create layout for keyboard container with minimal margins
+
         keyboard_layout = QVBoxLayout(self.keyboard_container)
-        keyboard_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
-        keyboard_layout.setSpacing(0)  # Remove spacing
-        
-        # Add the keyboard to the container
+        keyboard_layout.setContentsMargins(0, 0, 0, 0)
+        keyboard_layout.setSpacing(0)
+
         try:
             keyboard_layout.addWidget(self.keyboard_area)
         except Exception as e:
             logging.error(f"Error adding keyboard to layout: {e}")
-            # Try to recover by recreating the keyboard area
             try:
                 self.keyboard_area = QWidget(self)
                 keyboard_layout.addWidget(self.keyboard_area)
             except Exception as fallback_error:
                 logging.error(f"Failed to create fallback keyboard: {fallback_error}")
-        
-        # Add the keyboard container to the splitter
+
         self.main_splitter.addWidget(self.keyboard_container)
-        
-        # Set initial sizes for the splitter (editor gets more space than keyboard)
-        # Check if we have saved splitter state
+
         if "splitter_state" in self.preferences:
             try:
-                # Restore saved splitter state
                 saved_sizes = self.preferences["splitter_state"][1]
                 self.main_splitter.setSizes(saved_sizes)
                 logging.info(f"Restored splitter sizes: {saved_sizes}")
             except Exception as e:
-                # Fall back to default sizes
                 self.main_splitter.setSizes([700, default_keyboard_height])
                 logging.error(f"Error restoring splitter state: {e}")
         else:
-            # Use default sizes
             self.main_splitter.setSizes([700, default_keyboard_height])
-        
-        # Add the splitter to the main layout
+
         main_layout.addWidget(self.main_splitter)
+        self.main_splitter.setHandleWidth(8)
+        self.main_splitter.setChildrenCollapsible(False)
         
-        # Configure the splitter to look nice
-        self.main_splitter.setHandleWidth(8)  # Make the handle easier to grab
-        self.main_splitter.setChildrenCollapsible(False)  # Prevent widgets from being collapsed to zero size
-        
-        # Connect splitter moved signal to update keyboard
-        self.main_splitter.splitterMoved.connect(self.on_splitter_moved)
-        
-        # Ensure the keyboard area has the right size policy
         if hasattr(self.keyboard_area, 'setSizePolicy'):
             self.keyboard_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        # Connect keyboard resize signal if it's a SinhalaKeyboard
-        if hasattr(self.keyboard_area, 'keyboardResized'):
-            try:
-                # Connect the signal
-                self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
-            except Exception as e:
-                logger.error(f"Error connecting keyboard resize signal: {e}")
-        else:
-            logger.warning("Keyboard area doesn't have keyboardResized signal - skipping connection")
-        
-        # Show/hide keyboard container based on preferences
+
         if self.preferences["show_keyboard"]:
             self.keyboard_container.show()
         else:
             self.keyboard_container.hide()
 
-        # Configure layout properties
-        main_layout.setContentsMargins(0, 0, 0, 0) # Remove margins
-        main_layout.setSpacing(2)  # Reduce spacing between widgets
-        
-        # Set the layout's size constraints to allow manual resizing
-        # SetNoConstraint allows widgets to be resized beyond their size hints
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(2)
         main_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
-
-        # Set the central widget
         self.setCentralWidget(central_widget)
-        
-        # Force layout update
         central_widget.updateGeometry()
 
-        # Install event filter *after* editor exists and super().__init__ is done
-        # Install event filter directly on the editor widget
+    def init_event_handlers_and_timers(self):
+        """Initialize event handlers and timers."""
         self.editor.installEventFilter(self)
-        # Connect textChanged to update_status and update_suggestion_list
         self.editor.textChanged.connect(self.on_text_changed)
-        # Connect cursor position change to update formatting buttons
         self.editor.cursorPositionChanged.connect(self.update_format_actions)
-        # Add context menu support
         self.editor.setContextMenuPolicy(Qt.CustomContextMenu)
         self.editor.customContextMenuRequested.connect(self.show_context_menu)
+        
+        self.main_splitter.splitterMoved.connect(self.on_splitter_moved)
+        if hasattr(self.keyboard_area, 'keyboardResized'):
+            try:
+                self.keyboard_area.keyboardResized.connect(self.on_keyboard_resized)
+            except Exception as e:
+                logger.error(f"Error connecting keyboard resize signal: {e}")
+        else:
+            logger.warning("Keyboard area doesn't have keyboardResized signal - skipping connection")
 
-        # --- Build Menus/Toolbars ---
-        self.build_menu()
-        self.build_toolbars()
-        self.update_status() # Initial status
-
-        # --- Set up spell checking timer ---
         self.spell_check_timer = QTimer(self)
         self.spell_check_timer.setSingleShot(True)
         self.spell_check_timer.timeout.connect(self.perform_spell_check)
 
-        # --- Initialize Recent Files Menu ---
-        self.recent_files_menu = None
+    def init_menu_and_toolbars(self):
+        """Build menus and toolbars."""
+        self.build_menu()
+        self.build_toolbars()
+        self.update_status()  # Initial status
+        self.recent_files_menu = None # This is set in build_menu
         self.update_recent_files_menu()
+
 
     def show_context_menu(self, position):
         """Show right-click context menu."""

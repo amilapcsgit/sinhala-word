@@ -10,9 +10,33 @@ import logging
 logger = logging.getLogger("SinhalaWordProcessor.config")
 
 # Application paths
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level to project root
-USER_CONFIG_FILE = os.path.join(APP_DIR, "data", "user_config.json")
-USER_DICT_FILE = os.path.join(APP_DIR, "data", "sinhalawordmap.json")
+def get_app_dir():
+    """Get the application directory, handling both frozen and non-frozen cases."""
+    if getattr(sys, 'frozen', False):
+        # If the application is frozen (PyInstaller)
+        return os.path.dirname(sys.executable)
+    else:
+        # If running from source
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def get_user_data_dir():
+    """Get the user data directory."""
+    user_data_dir = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'SinhalaWord')
+    if not os.path.exists(user_data_dir):
+        os.makedirs(user_data_dir)
+    return user_data_dir
+
+# Import sys for frozen detection
+import sys
+
+APP_DIR = get_app_dir()
+USER_DATA_DIR = get_user_data_dir()
+
+# User configuration files
+USER_CONFIG_FILE = os.path.join(USER_DATA_DIR, "user_config.json")
+USER_DICT_FILE = os.path.join(USER_DATA_DIR, "sinhalawordmap.json")
+
+# Application resources
 LEXICON_DIR = os.path.join(APP_DIR, "resources", "dictionary", "chunks")
 
 # Default font settings
@@ -70,6 +94,9 @@ def save_user_preferences(prefs):
         prefs (dict): User preferences to save
     """
     try:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(USER_CONFIG_FILE), exist_ok=True)
+        
         with open(USER_CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(prefs, f, indent=4)
         logger.info(f"Saved user preferences to {USER_CONFIG_FILE}")

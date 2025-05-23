@@ -51,6 +51,10 @@ _REQS = {
 }
 
 def _ensure_deps():
+    # Skip dependency installation if running as a frozen application
+    if getattr(sys, 'frozen', False):
+        return
+        
     for pip_name, mod_name in _REQS.items():
         if importlib.util.find_spec(mod_name) is None:
             log.warning(f"Missing '{pip_name}', installing…")
@@ -3507,16 +3511,59 @@ def write_pdf_file(file_path, qtext_document):
 # ------------------------------------------------------------------
 #  Main function
 # ------------------------------------------------------------------
+def ensure_user_data_files():
+    """Ensure necessary user data files exist."""
+    # Get paths from config
+    from app import config
+    user_data_dir = config.USER_DATA_DIR
+    map_file = config.USER_DICT_FILE
+    
+    # Check for sinhalawordmap.json and copy if needed
+    if not os.path.exists(map_file):
+        # Try to find the original file in multiple locations
+        app_path = config.APP_DIR
+        possible_locations = [
+            os.path.join(app_path, 'sinhalawordmap.json'),  # Root directory
+            os.path.join(app_path, 'data', 'sinhalawordmap.json'),  # Data directory
+        ]
+        
+        # Try each possible location
+        found = False
+        for original_map in possible_locations:
+            if os.path.exists(original_map):
+                import shutil
+                shutil.copy2(original_map, map_file)
+                found = True
+                logger.info(f"Copied sinhalawordmap.json from {original_map} to {map_file}")
+                break
+                
+        if not found:
+            # Create an empty map file if original not found
+            with open(map_file, 'w', encoding='utf-8') as f:
+                f.write('{}')
+            logger.warning(f"Could not find sinhalawordmap.json in any location. Created empty file at {map_file}")
+    
+    return user_data_dir
+
 def main():
     # Enable high DPI scaling
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
+    # Ensure user data files exist
+    ensure_user_data_files()
 
     # Create QApplication
     app = QApplication(sys.argv)
     
     # Set application icon
-    icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                           "resources", "splash", "sinhalaword_icon.ico")
+    from app import config
+    app_path = config.APP_DIR
+    icon_path = os.path.join(app_path, "resources", "splash", "sinhalaword_icon.ico")
+    
+    if not os.path.exists(icon_path) and getattr(sys, 'frozen', False):
+        # If frozen and icon not found in resources, try the executable directory
+        icon_path = os.path.join(app_path, "sinhalaword_icon.ico")
+    
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
     
@@ -3535,6 +3582,15 @@ def main():
 
     # Show the window
     win.show()
+    
+    # If we're using a splash screen, close it when the main window is shown
+    if getattr(sys, 'frozen', False):
+        # This will signal PyInstaller's splash screen to close
+        import pyi_splash
+        try:
+            pyi_splash.close()
+        except:
+            pass
 
     # Start the application event loop
     sys.exit(app.exec())

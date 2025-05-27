@@ -6,17 +6,18 @@ This module contains application-wide settings and constants.
 import os
 import json
 import logging
+import sys
 
 logger = logging.getLogger("SinhalaWordProcessor.config")
 
 # Application paths
 def get_app_dir():
     """Get the application directory, handling both frozen and non-frozen cases."""
-    if getattr(sys, 'frozen', False):
-        # If the application is frozen (PyInstaller)
-        return os.path.dirname(sys.executable)
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # If the application is frozen (PyInstaller) and _MEIPASS is available
+        return sys._MEIPASS
     else:
-        # If running from source
+        # If running from source or _MEIPASS is not available
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_user_data_dir():
@@ -25,9 +26,6 @@ def get_user_data_dir():
     if not os.path.exists(user_data_dir):
         os.makedirs(user_data_dir)
     return user_data_dir
-
-# Import sys for frozen detection
-import sys
 
 APP_DIR = get_app_dir()
 USER_DATA_DIR = get_user_data_dir()

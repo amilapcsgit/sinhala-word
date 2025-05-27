@@ -23,7 +23,7 @@ datas.extend(collect_data_files('app'))
 datas.extend(collect_data_files('resources'))
 
 # Add specific directories that need to be included
-datas.append(('resources/', 'resources/'))
+# datas.append(('resources/', 'resources/')) # Redundant due to collect_data_files('resources')
 datas.append(('app/', 'app/'))
 
 # Add dictionaries and other data files
@@ -31,14 +31,14 @@ if os.path.exists(os.path.join(base_dir, 'dictionaries')):
     datas.append(('dictionaries/', 'dictionaries/'))
 
 # Add data directory if it exists
-if os.path.exists(os.path.join(base_dir, 'data')):
-    datas.append(('data/', 'data/'))
+# if os.path.exists(os.path.join(base_dir, 'data')):
+#     datas.append(('data/', 'data/')) # Redundant, sinhalawordmap.json handled by root .json scan
     
 # Explicitly add sinhalawordmap.json from data directory
-sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
-if os.path.exists(sinhalawordmap_path):
-    # Add to root directory for backward compatibility
-    datas.append((sinhalawordmap_path, '.'))
+# sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
+# if os.path.exists(sinhalawordmap_path):
+#     # Add to root directory for backward compatibility
+#     datas.append((sinhalawordmap_path, '.')) # Handled by root .json scan if file is in root
 
 # Add any JSON files in the root directory
 for file in os.listdir(base_dir):

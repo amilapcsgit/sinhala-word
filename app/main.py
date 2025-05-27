@@ -3512,38 +3512,48 @@ def write_pdf_file(file_path, qtext_document):
 #  Main function
 # ------------------------------------------------------------------
 def ensure_user_data_files():
-    """Ensure necessary user data files exist."""
-    # Get paths from config
+    """
+    Ensure necessary user data files exist.
+    Copies the bundled sinhalawordmap.json to the user data directory if it doesn't exist.
+    Creates an empty map if the bundled one is also missing.
+    """
     from app import config
-    user_data_dir = config.USER_DATA_DIR
-    map_file = config.USER_DICT_FILE
-    
-    # Check for sinhalawordmap.json and copy if needed
-    if not os.path.exists(map_file):
-        # Try to find the original file in multiple locations
-        app_path = config.APP_DIR
-        possible_locations = [
-            os.path.join(app_path, 'sinhalawordmap.json'),  # Root directory
-            os.path.join(app_path, 'data', 'sinhalawordmap.json'),  # Data directory
-        ]
+    import os
+    import shutil
+    import json
+    # Logger is already defined globally in this file as 'logger'
+
+    # Path to the bundled (initial) sinhalawordmap.json
+    initial_map_source_path = os.path.join(config.APP_DIR, 'sinhalawordmap.json')
+
+    # Check if the user's specific sinhalawordmap.json exists
+    if not os.path.exists(config.USER_DICT_FILE):
+        logger.info(f"User dictionary {config.USER_DICT_FILE} not found. Attempting to create it.")
+        # Ensure the user data directory exists
+        os.makedirs(config.USER_DATA_DIR, exist_ok=True)
         
-        # Try each possible location
-        found = False
-        for original_map in possible_locations:
-            if os.path.exists(original_map):
-                import shutil
-                shutil.copy2(original_map, map_file)
-                found = True
-                logger.info(f"Copied sinhalawordmap.json from {original_map} to {map_file}")
-                break
-                
-        if not found:
-            # Create an empty map file if original not found
-            with open(map_file, 'w', encoding='utf-8') as f:
-                f.write('{}')
-            logger.warning(f"Could not find sinhalawordmap.json in any location. Created empty file at {map_file}")
+        if os.path.exists(initial_map_source_path):
+            # If the bundled map exists, copy it
+            try:
+                shutil.copy2(initial_map_source_path, config.USER_DICT_FILE)
+                logger.info(f"Copied bundled sinhalawordmap.json from {initial_map_source_path} to {config.USER_DICT_FILE}")
+            except Exception as e:
+                logger.error(f"Error copying bundled sinhalawordmap.json: {e}. Creating an empty user map.")
+                # If copy fails, create an empty map
+                with open(config.USER_DICT_FILE, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
+                logger.warning(f"Created an empty user map at {config.USER_DICT_FILE} due to copy error.")
+        else:
+            # If the bundled map does not exist, create an empty JSON file
+            logger.warning(f"Bundled sinhalawordmap.json not found at {initial_map_source_path}. Creating an empty user map.")
+            with open(config.USER_DICT_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+            logger.info(f"Created an empty user map at {config.USER_DICT_FILE}")
+    else:
+        logger.info(f"User dictionary {config.USER_DICT_FILE} already exists.")
     
-    return user_data_dir
+    # The function should not return any value as per requirements.
+    # The original function returned user_data_dir, but it's not used by the caller.
 
 def main():
     # Enable high DPI scaling

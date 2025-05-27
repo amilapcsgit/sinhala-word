@@ -46,6 +46,50 @@ def main():
         shutil.copy2(exe_path, portable_dir)
         print(f"Copied executable to {portable_dir}")
     
+    # Copy necessary resource files to the portable directory
+    # Create resources directory structure
+    resources_dir = os.path.join(portable_dir, "resources")
+    os.makedirs(resources_dir, exist_ok=True)
+    
+    # Copy dictionary resources
+    dict_src = os.path.join(base_dir, "resources", "dictionary")
+    dict_dest = os.path.join(resources_dir, "dictionary")
+    if os.path.exists(dict_src):
+        shutil.copytree(dict_src, dict_dest, dirs_exist_ok=True)
+        print(f"Copied dictionary resources to {dict_dest}")
+    
+    # Copy splash resources
+    splash_src = os.path.join(base_dir, "resources", "splash")
+    splash_dest = os.path.join(resources_dir, "splash")
+    if os.path.exists(splash_src):
+        shutil.copytree(splash_src, splash_dest, dirs_exist_ok=True)
+        print(f"Copied splash resources to {splash_dest}")
+    
+    # Copy fonts resources if they exist
+    fonts_src = os.path.join(base_dir, "resources", "fonts")
+    fonts_dest = os.path.join(resources_dir, "fonts")
+    if os.path.exists(fonts_src):
+        shutil.copytree(fonts_src, fonts_dest, dirs_exist_ok=True)
+        print(f"Copied fonts resources to {fonts_dest}")
+    
+    # Create a data directory in the portable directory
+    data_dir = os.path.join(portable_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    print(f"Created data directory at {data_dir}")
+    
+    # Copy sinhalawordmap.json to the portable data directory
+    wordmap_src = os.path.join(base_dir, "sinhalawordmap.json")
+    if os.path.exists(wordmap_src):
+        shutil.copy2(wordmap_src, os.path.join(data_dir, "sinhalawordmap.json"))
+        print(f"Copied sinhalawordmap.json to {os.path.join(data_dir, 'sinhalawordmap.json')}")
+    
+    # Create a portable.txt file to indicate this is a portable installation
+    portable_marker = os.path.join(portable_dir, "portable.txt")
+    with open(portable_marker, 'w') as f:
+        f.write("This file indicates that SinhalaWord is running in portable mode.\n")
+        f.write("User data will be stored in the 'data' directory next to the executable.\n")
+    print(f"Created portable marker file at {portable_marker}")
+    
     # Create a batch file to run the application
     batch_path = os.path.join(portable_dir, "SinhalaWord.bat")
     with open(batch_path, 'w') as f:
@@ -61,7 +105,9 @@ def main():
         f.write("=================\n\n")
         f.write("This is a portable version of SinhalaWord application.\n")
         f.write("To run the application, double-click on SinhalaWord.exe or SinhalaWord.bat.\n\n")
-        f.write("No installation is required.\n")
+        f.write("No installation is required.\n\n")
+        f.write("Copyright (c) 2025 L.J.Amila Prasad Perera\n")
+        f.write("CC - Free to use by crediting the owner (L.J.Amila Prasad Perera)\n")
     
     print(f"Created README file at {readme_path}")
     

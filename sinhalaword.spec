@@ -1,4 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""
+Sinhala Word Processor - PyInstaller spec file
+Copyright (c) 2025 L.J.Amila Prasad Perera
+CC - Free to use by crediting the owner (L.J.Amila Prasad Perera)
+"""
 
 import os
 import sys
@@ -20,10 +25,9 @@ icon_file = os.path.join(base_dir, 'resources', 'splash', 'sinhalaword_icon.ico'
 # Collect all necessary data files
 datas = []
 datas.extend(collect_data_files('app'))
-datas.extend(collect_data_files('resources'))
 
-# Add specific directories that need to be included
-# datas.append(('resources/', 'resources/')) # Redundant due to collect_data_files('resources')
+# Explicitly add resources directory with its structure preserved
+datas.append(('resources/', 'resources/'))
 datas.append(('app/', 'app/'))
 
 # Add dictionaries and other data files
@@ -31,14 +35,14 @@ if os.path.exists(os.path.join(base_dir, 'dictionaries')):
     datas.append(('dictionaries/', 'dictionaries/'))
 
 # Add data directory if it exists
-# if os.path.exists(os.path.join(base_dir, 'data')):
-#     datas.append(('data/', 'data/')) # Redundant, sinhalawordmap.json handled by root .json scan
+if os.path.exists(os.path.join(base_dir, 'data')):
+    datas.append(('data/', 'data/'))
     
 # Explicitly add sinhalawordmap.json from data directory
-# sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
-# if os.path.exists(sinhalawordmap_path):
-#     # Add to root directory for backward compatibility
-#     datas.append((sinhalawordmap_path, '.')) # Handled by root .json scan if file is in root
+sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
+if os.path.exists(sinhalawordmap_path):
+    # Add to root directory for backward compatibility
+    datas.append((sinhalawordmap_path, '.'))
 
 # Add any JSON files in the root directory
 for file in os.listdir(base_dir):

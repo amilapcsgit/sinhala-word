@@ -1,5 +1,8 @@
 # Sinhala Word 2025 — v6.1 - Multi-Format with Printing Support
 """
+Copyright (c) 2025 L.J.Amila Prasad Perera
+CC - Free to use by crediting the owner (L.J.Amila Prasad Perera)
+
 A lightweight **Word‑2000‑style** editor refreshed with Windows‑11 Fluent UI:
 
 • **Realtime Singlish → Sinhala** (Buffer-based input like Sintip)
@@ -262,7 +265,15 @@ class SinhalaWordApp(QMainWindow):
         self.MAIN_LEXICON = {}
         self.USER_MAP = {}
         self.MAP = {}
+        
+        # Set the user map file path
+        # In portable mode, this will be in the data directory next to the executable
+        # In installed mode, this will be in the user's AppData directory
         self.USER_MAP_FP = config.USER_DICT_FILE
+        
+        # Log the user map file path
+        logger.info(f"User map file path: {self.USER_MAP_FP}")
+        
         self.SAVE_PENDING = False
 
     def init_suggestion_handling(self):
@@ -2051,15 +2062,23 @@ class SinhalaWordApp(QMainWindow):
             self,
             "About Sinhala Word Processor",
             """<h1>Sinhala Word Processor</h1>
-            <p>Version 3.3</p>
+            <p>Version 6.1 (2025)</p>
             <p>A lightweight word processor with Sinhala transliteration support.</p>
-            <p>Features:</p>
+            <p><b>Features:</b></p>
             <ul>
                 <li>Realtime Singlish to Sinhala transliteration</li>
-                <li>Suggestion popup</li>
-                <li>Basic spell checker</li>
-                <li>Dark/Light theme toggle</li>
+                <li>Suggestion popup with intelligent word prediction</li>
+                <li>Basic spell checker with custom dictionary support</li>
+                <li>Dark/Light theme toggle with modern Fluent UI design</li>
+                <li>Multi-format support (TXT, DOCX, PDF)</li>
+                <li>Printing support with preview</li>
+                <li>On-screen Sinhala keyboard with customizable size</li>
+                <li>User dictionary management</li>
+                <li>Automatic line wrapping and formatting tools</li>
             </ul>
+            <p><b>Developer:</b> L.J.Amila Prasad Perera</p>
+            <p><b>Copyright:</b> &copy; 2025 L.J.Amila Prasad Perera</p>
+            <p><b>License:</b> CC - Free to use by crediting the owner (L.J.Amila Prasad Perera)</p>
             """
         )
 
@@ -3066,10 +3085,13 @@ class SinhalaWordApp(QMainWindow):
     def _save_map(self, force=False):
         if force or self.SAVE_PENDING:
             try:
+                # Ensure the directory exists
+                os.makedirs(os.path.dirname(self.USER_MAP_FP), exist_ok=True)
+                
                 with open(self.USER_MAP_FP, "w", encoding="utf8") as f:
                     json.dump(self.USER_MAP, f, ensure_ascii=False, indent=2)
                 self.SAVE_PENDING = False
-                logger.info(f"User map saved to {os.path.basename(self.USER_MAP_FP)}")
+                logger.info(f"User map saved to {self.USER_MAP_FP}")
             except Exception as e:
                 logger.error(f"Error saving user map file: {e}")
                 QMessageBox.warning(self, "Warning", f"Could not save user dictionary: {e}")
@@ -3265,25 +3287,45 @@ class SinhalaWordApp(QMainWindow):
         logger.info("Loading dictionaries...")
         try:
             # Load user map
-            if os.path.exists(self.USER_MAP_FP):
+            # First try the standard location
+            user_map_path = self.USER_MAP_FP
+            
+            # If not found, try to find it in other locations
+            if not os.path.exists(user_map_path):
+                found_path = config.find_file("sinhalawordmap.json")
+                if found_path:
+                    user_map_path = found_path
+                    logger.info(f"Found user map at alternative location: {user_map_path}")
+            
+            if os.path.exists(user_map_path):
                 try:
-                    with open(self.USER_MAP_FP, "r", encoding="utf8") as f:
+                    with open(user_map_path, "r", encoding="utf8") as f:
                         self.USER_MAP = json.load(f)
-                    logger.info(f"Loaded user map from {os.path.basename(self.USER_MAP_FP)}")
+                    logger.info(f"Loaded user map from {os.path.basename(user_map_path)}")
+                    
+                    # If we loaded from a non-standard location, update the USER_MAP_FP
+                    if user_map_path != self.USER_MAP_FP:
+                        self.USER_MAP_FP = user_map_path
+                        logger.info(f"Updated user map path to: {self.USER_MAP_FP}")
                 except (IOError, json.JSONDecodeError) as e:
                     logger.error(f"Error loading user map: {e}")
                     QMessageBox.warning(self, "Warning", f"Could not load user dictionary: {e}")
                     self.USER_MAP = {}
             else:
                 self.USER_MAP = {}
-                logger.info(f"User map file not found at {os.path.basename(self.USER_MAP_FP)}. Starting with empty user map.")
+                logger.info(f"User map file not found at any location. Starting with empty user map.")
 
             # Load main lexicon chunks
             self.MAIN_LEXICON = {}
-            if os.path.exists(config.LEXICON_DIR):
-                for filename in os.listdir(config.LEXICON_DIR):
+            
+            # Use the get_lexicon_dir function to find the lexicon directory
+            lexicon_dir = config.get_lexicon_dir()
+            logger.info(f"Looking for lexicon chunks in: {lexicon_dir}")
+            
+            if os.path.exists(lexicon_dir):
+                for filename in os.listdir(lexicon_dir):
                     if filename.endswith(".json.gz"):
-                        filepath = os.path.join(config.LEXICON_DIR, filename)
+                        filepath = os.path.join(lexicon_dir, filename)
                         try:
                             with gzip.open(filepath, "rt", encoding="utf8") as f:
                                 chunk = json.load(f)
@@ -3291,8 +3333,18 @@ class SinhalaWordApp(QMainWindow):
                             logger.info(f"Loaded lexicon chunk: {filename}")
                         except Exception as e:
                             logger.error(f"Error loading lexicon chunk {filename}: {e}")
+                    elif filename.endswith(".json"):
+                        # Also try non-gzipped JSON files
+                        filepath = os.path.join(lexicon_dir, filename)
+                        try:
+                            with open(filepath, "r", encoding="utf8") as f:
+                                chunk = json.load(f)
+                                self.MAIN_LEXICON.update(chunk)
+                            logger.info(f"Loaded lexicon chunk: {filename}")
+                        except Exception as e:
+                            logger.error(f"Error loading lexicon chunk {filename}: {e}")
             else:
-                logger.warning(f"Lexicon chunks directory not found at {os.path.basename(config.LEXICON_DIR)}. Main lexicon will be empty.")
+                logger.warning(f"Lexicon chunks directory not found at {lexicon_dir}. Main lexicon will be empty.")
 
             # Combine user map and main lexicon for quick lookup
             self.MAP = {**self.MAIN_LEXICON, **self.USER_MAP}
@@ -3518,6 +3570,9 @@ def ensure_user_data_files():
     Ensure necessary user data files exist.
     Copies the bundled sinhalawordmap.json to the user data directory if it doesn't exist.
     Creates an empty map if the bundled one is also missing.
+    
+    In portable mode, files are stored in the 'data' directory next to the executable.
+    In installed mode, files are stored in the user's AppData directory.
     """
     from app import config
     import os
@@ -3525,16 +3580,30 @@ def ensure_user_data_files():
     import json
     # Logger is already defined globally in this file as 'logger'
 
-    # Path to the bundled (initial) sinhalawordmap.json
-    initial_map_source_path = os.path.join(config.APP_DIR, 'sinhalawordmap.json')
+    # Log the user data directory being used
+    logger.info(f"Using user data directory: {config.USER_DATA_DIR}")
+    logger.info(f"User dictionary file path: {config.USER_DICT_FILE}")
+
+    # Find the bundled (initial) sinhalawordmap.json
+    initial_map_source_path = config.find_file('sinhalawordmap.json')
+    
+    if initial_map_source_path:
+        logger.info(f"Found bundled sinhalawordmap.json at {initial_map_source_path}")
+    else:
+        logger.warning("Could not find sinhalawordmap.json in any of the search paths")
+        # Try data directory as a fallback
+        data_map_path = os.path.join(config.APP_DIR, 'data', 'sinhalawordmap.json')
+        if os.path.exists(data_map_path):
+            initial_map_source_path = data_map_path
+            logger.info(f"Found sinhalawordmap.json in data directory: {initial_map_source_path}")
 
     # Check if the user's specific sinhalawordmap.json exists
     if not os.path.exists(config.USER_DICT_FILE):
         logger.info(f"User dictionary {config.USER_DICT_FILE} not found. Attempting to create it.")
         # Ensure the user data directory exists
-        os.makedirs(config.USER_DATA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(config.USER_DICT_FILE), exist_ok=True)
         
-        if os.path.exists(initial_map_source_path):
+        if initial_map_source_path and os.path.exists(initial_map_source_path):
             # If the bundled map exists, copy it
             try:
                 shutil.copy2(initial_map_source_path, config.USER_DICT_FILE)
@@ -3547,7 +3616,7 @@ def ensure_user_data_files():
                 logger.warning(f"Created an empty user map at {config.USER_DICT_FILE} due to copy error.")
         else:
             # If the bundled map does not exist, create an empty JSON file
-            logger.warning(f"Bundled sinhalawordmap.json not found at {initial_map_source_path}. Creating an empty user map.")
+            logger.warning(f"Bundled sinhalawordmap.json not found. Creating an empty user map.")
             with open(config.USER_DICT_FILE, 'w', encoding='utf-8') as f:
                 json.dump({}, f)
             logger.info(f"Created an empty user map at {config.USER_DICT_FILE}")

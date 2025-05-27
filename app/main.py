@@ -44,6 +44,8 @@ import logging
 import importlib.util, subprocess, sys, logging
 log = logging.getLogger(__name__)
 _REQS = {
+    "PySide6": "PySide6",
+    "PySide6-Fluent-Widgets": "qfluentwidgets",
     "python-docx": "docx",
     "reportlab": "reportlab", # reportlab is still needed for now if _do_save calls it for other types.
     "pypdf": "pypdf",

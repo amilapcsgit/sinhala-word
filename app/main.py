@@ -55,17 +55,17 @@ _REQS = {
     "PySide6.QtPrintSupport": "PySide6.QtPrintSupport" # Added QPrinter dependency
 }
 
-def _ensure_deps():
-    # Skip dependency installation if running as a frozen application
-    if getattr(sys, 'frozen', False):
-        return
-        
-    for pip_name, mod_name in _REQS.items():
-        if importlib.util.find_spec(mod_name) is None:
-            log.warning(f"Missing '{pip_name}', installing…")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+# def _ensure_deps():
+#     # Skip dependency installation if running as a frozen application
+#     if getattr(sys, 'frozen', False):
+#         return
+#         
+#     for pip_name, mod_name in _REQS.items():
+#         if importlib.util.find_spec(mod_name) is None:
+#             log.warning(f"Missing '{pip_name}', installing…")
+#             subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
 
-_ensure_deps()
+# _ensure_deps()
 # ------------------------------------------------------------------
 
 # Allow limited font fallbacks for better compatibility
@@ -3586,6 +3586,7 @@ def ensure_user_data_files():
 
     # Find the bundled (initial) sinhalawordmap.json
     initial_map_source_path = config.find_file('sinhalawordmap.json')
+    logger.info(f"Result from config.find_file('sinhalawordmap.json'): {initial_map_source_path}")
     
     if initial_map_source_path:
         logger.info(f"Found bundled sinhalawordmap.json at {initial_map_source_path}")

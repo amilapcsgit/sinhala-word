@@ -38,11 +38,11 @@ if os.path.exists(os.path.join(base_dir, 'dictionaries')):
 if os.path.exists(os.path.join(base_dir, 'data')):
     datas.append(('data/', 'data/'))
     
-# Explicitly add sinhalawordmap.json from data directory
-sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
-if os.path.exists(sinhalawordmap_path):
-    # Add to root directory for backward compatibility
-    datas.append((sinhalawordmap_path, '.'))
+# # Explicitly add sinhalawordmap.json from data directory
+# sinhalawordmap_path = os.path.join(base_dir, 'data', 'sinhalawordmap.json')
+# if os.path.exists(sinhalawordmap_path):
+#     # Add to root directory for backward compatibility
+#     datas.append((sinhalawordmap_path, '.'))
 
 # Add any JSON files in the root directory
 for file in os.listdir(base_dir):
@@ -102,7 +102,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,

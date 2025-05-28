@@ -85,13 +85,17 @@ def get_user_data_dir():
     if getattr(sys, 'frozen', False):
         # We're running as a frozen executable
         exe_dir = os.path.dirname(sys.executable)
+        logger.info(f"Executable directory: {exe_dir}")
         
         # Check if we're in a directory named SinhalaWord_Portable
+        logger.info(f"Checking for portable mode: parent directory name is '{os.path.basename(exe_dir)}'")
         if os.path.basename(exe_dir) == "SinhalaWord_Portable":
             portable_mode = True
         else:
             # Check if there's a portable.txt file
+            logger.info(f"Checking for portable.txt at: {os.path.join(exe_dir, 'portable.txt')}")
             portable_mode = os.path.exists(os.path.join(exe_dir, "portable.txt"))
+            logger.info(f"portable.txt found: {portable_mode}")
             
         if portable_mode:
             # We're in portable mode, use a 'data' directory in the same location as the executable
@@ -103,6 +107,7 @@ def get_user_data_dir():
             logger.info(f"Running in installed mode, using data directory: {user_data_dir}")
     else:
         # We're running from source, check if there's a portable.txt file in the current directory
+        logger.info(f"Running from source. Checking for portable.txt in current working directory: {os.path.join(os.getcwd(), 'portable.txt')}")
         if os.path.exists(os.path.join(os.getcwd(), "portable.txt")):
             # We're in portable mode, use a 'data' directory in the current directory
             user_data_dir = os.path.join(os.getcwd(), "data")
@@ -111,6 +116,7 @@ def get_user_data_dir():
             # We're in installed mode, use the user's AppData directory
             user_data_dir = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'SinhalaWord')
             logger.info(f"Running in installed mode from source, using data directory: {user_data_dir}")
+        logger.info(f"Source mode: portable.txt found in CWD: {os.path.exists(os.path.join(os.getcwd(), 'portable.txt'))}")
     
     # Ensure the directory exists
     if not os.path.exists(user_data_dir):

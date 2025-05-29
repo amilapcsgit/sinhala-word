@@ -1,0 +1,14 @@
+{
+    "theme": "light",
+    "font": "UN-Ganganee",
+    "font_size": 20,
+    "keyboard_font_size": 20,
+    "window_size": [
+        1327,
+        720
+    ],
+    "show_keyboard": true,
+    "show_suggestions": true,
+    "singlish_enabled": true,
+    "recent_files": []
+}

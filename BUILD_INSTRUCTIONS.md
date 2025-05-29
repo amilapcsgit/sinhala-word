@@ -47,6 +47,7 @@ After the build process completes, you will find:
    ```
    dist/SinhalaWord_Portable/
    ```
+   **Important:** To ensure the application runs in portable mode (saving data locally), always run `SinhalaWord.exe` or `SinhalaWord.bat` from within the `SinhalaWord_Portable` directory.
 
 3. Installer (if NSIS is installed):
    ```

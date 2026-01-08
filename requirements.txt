@@ -1,6 +1,11 @@
-PySide6
-PySide6-Fluent-Widgets
-python-docx
-reportlab
-pypdf
-pyinstaller
+# Core UI Framework
+PySide6>=6.6.0,<7.0.0
+PySide6-Fluent-Widgets>=1.5.0
+
+# Document Processing
+python-docx>=0.8.11,<2.0.0
+reportlab>=4.0.0,<5.0.0
+pypdf>=3.0.0,<5.0.0
+
+# Build Tools (moved to requirements-dev.txt)
+# pyinstaller>=6.0.0

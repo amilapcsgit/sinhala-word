@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    name: Build and Release on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: |
+        python build_app.py
+
+    - name: Create installer (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Install NSIS if needed and create installer
+        makensis installer.nsi
+      continue-on-error: true
+
+    - name: Create DMG (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        # Create DMG installer for macOS
+        # Add DMG creation script here
+      continue-on-error: true
+
+    - name: Create AppImage (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        # Create AppImage for Linux
+        # Add AppImage creation script here
+      continue-on-error: true
+
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/*
+          *.exe
+          *.dmg
+          *.AppImage
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

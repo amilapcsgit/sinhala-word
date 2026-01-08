@@ -1,27 +1,22 @@
-"""Pytest configuration and shared fixtures."""
+"""Pytest configuration and fixtures."""
 import pytest
+from PySide6.QtWidgets import QApplication
 import sys
-from pathlib import Path
-
-# Add the app directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-@pytest.fixture
-def sample_sinhala_map():
-    """Provide a sample Sinhala transliteration map for testing."""
-    return {
-        "mama": "මම",
-        "api": "අපි",
-        "oya": "ඔය",
-        "kohomada": "කොහොමද",
-        "ayubowan": "ආයුබෝවන්",
-        "suba": "සුබ",
-        "dawasa": "දවස",
-    }
+@pytest.fixture(scope="session")
+def qapp():
+    """Create QApplication instance for the test session."""
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    yield app
+    # Cleanup is handled automatically
 
 
 @pytest.fixture
-def empty_map():
-    """Provide an empty map for testing."""
-    return {}
+def mock_config(tmp_path):
+    """Create a temporary configuration directory for testing."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    return config_dir

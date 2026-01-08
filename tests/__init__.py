@@ -1,1 +1,1 @@
-"""Test suite for Sinhala Word Processor."""
+"""Test suite for Sinhala Word application."""
